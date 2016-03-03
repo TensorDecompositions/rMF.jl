@@ -3,6 +3,8 @@ module rMF
 import NMFk
 import JLD
 import DataStructures
+using Gadfly
+using Colors
 
 maxbuckets = 10
 mixers = Array(Array{Float64, 2}, maxbuckets)
@@ -11,9 +13,10 @@ fitquality = Array(Float64, maxbuckets)
 robustness = Array(Float64, maxbuckets)
 
 info("rMF ...")
-info("Execute `loaddata()` to get the data ...")
-info("Execute `execute(5, retries=50)` to get the results for the 5 bucket case with 50 reruns ...")
-info("Execute `getresults(5, retries=50)` to see the results for the 5 bucket case.")
+info("Execute `rMF.loaddata()` to get the data ...")
+info("Execute `rMF.execute(5, retries=50)` to get the results for the 5 bucket case with 50 reruns ...")
+info("Execute `rMF.getresults(5, retries=50)` to see the results for the 5 bucket case.")
+info("Execute `rMF.getresultsshort(5:8, retries=50)` to see the results for bucket cases 5 to 8.")
 
 function getresultsshort(range=1:maxbuckets; retries=10)
 	for numbuckets = range
@@ -53,12 +56,34 @@ function getresults(numbuckets=5; retries=10)
 	end
 	info("Fit quality: $(fitquality[numbuckets])")
 	info("Robustness: $(robustness[numbuckets])")
-	info("Buckets:")
-	display([uniquenames buckets[numbuckets]'])
 	info("Match errors:")
 	display([["Wells"; uniquenames]'; uniquewells concmatrix - mixers[numbuckets] * buckets[numbuckets]]')
 	info("Relative match errors:")
 	display([["Wells"; uniquenames]'; uniquewells (concmatrix - mixers[numbuckets] * buckets[numbuckets])./concmatrix]')
+	info("Max Bucket:")
+	display(["Max" map(i->maximum(buckets[numbuckets][i,:]), 1:size(buckets[numbuckets])[1])'])
+	info("Max/min Species:")
+	maxs = maximum(buckets[numbuckets], 1)
+	mins = minimum(buckets[numbuckets], 1)
+	display([uniquenames maxs' mins'])
+	info("Buckets:")
+	display([uniquenames buckets[numbuckets]'])
+	info("Normalized buckets:")
+	nbuckets = ( buckets[numbuckets] .- mins ) ./ (maxs - mins)
+	display([uniquenames nbuckets'])
+	s = sum(nbuckets, 2)
+	i = sortperm(collect(s), rev=true)
+	info("Sorted normalized buckets:")
+	sbuckets = nbuckets[i,:]
+	display([uniquenames sbuckets'])
+	# sbuckets[sbuckets.<1e-6] = 1e-6
+	gbucket = Gadfly.spy(sbuckets', Gadfly.Scale.y_discrete(labels = i->uniquenames[i]), Gadfly.Scale.x_discrete,
+				Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"),
+				Gadfly.Theme(default_point_size=20pt, major_label_font_size=14pt, minor_label_font_size=12pt, key_title_font_size=16pt, key_label_font_size=12pt),
+				Gadfly.Scale.ContinuousColorScale(Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red"))))
+	filename = "rmf-$case-$numbuckets-$retries-buckets.svg"
+	# filename, format = Mads.setimagefileformat(filename, format)
+	Gadfly.draw(Gadfly.SVG(filename,6inch,12inch), gbucket)
 	if w
 		warn("Results are loaded from external file `rmf-$case-$numbuckets-$retries.jld`...")
 		warn("Execute `execute($numbuckets)` to rerun ...")
@@ -154,5 +179,7 @@ function execute(range=1:maxbuckets; retries=10)
 end
 
 info("Have fun ...")
+
+loaddata()
 
 end
