@@ -60,8 +60,6 @@ function getresults(numbuckets=5; retries=10)
 	display([["Wells"; uniquenames]'; uniquewells concmatrix - mixers[numbuckets] * buckets[numbuckets]]')
 	info("Relative match errors:")
 	display([["Wells"; uniquenames]'; uniquewells (concmatrix - mixers[numbuckets] * buckets[numbuckets])./concmatrix]')
-	info("Max Bucket:")
-	display(["Max" map(i->maximum(buckets[numbuckets][i,:]), 1:size(buckets[numbuckets])[1])'])
 	info("Max/min Species:")
 	maxs = maximum(buckets[numbuckets], 1)
 	mins = minimum(buckets[numbuckets], 1)
@@ -76,14 +74,17 @@ function getresults(numbuckets=5; retries=10)
 	info("Sorted normalized buckets:")
 	sbuckets = nbuckets[i,:]
 	display([uniquenames sbuckets'])
+	info("Sorted buckets:")
+	s2buckets = buckets[numbuckets][i,:]
+	display([uniquenames s2buckets'])
 	# sbuckets[sbuckets.<1e-6] = 1e-6
 	gbucket = Gadfly.spy(sbuckets', Gadfly.Scale.y_discrete(labels = i->uniquenames[i]), Gadfly.Scale.x_discrete,
 				Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"),
 				Gadfly.Theme(default_point_size=20pt, major_label_font_size=14pt, minor_label_font_size=12pt, key_title_font_size=16pt, key_label_font_size=12pt),
 				Gadfly.Scale.ContinuousColorScale(Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red"))))
-	filename = "rmf-$case-$numbuckets-$retries-buckets.svg"
+	filename = "rmf-$case-$numbuckets-$retries-buckets.png"
 	# filename, format = Mads.setimagefileformat(filename, format)
-	Gadfly.draw(Gadfly.SVG(filename,6inch,12inch), gbucket)
+	Gadfly.draw(Gadfly.PNG(filename,6inch,12inch), gbucket)
 	if w
 		warn("Results are loaded from external file `rmf-$case-$numbuckets-$retries.jld`...")
 		warn("Execute `execute($numbuckets)` to rerun ...")
