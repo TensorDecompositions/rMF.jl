@@ -45,8 +45,8 @@ info("Execute `rMF.getresultsshort(5:8, retries=50)` to see the results for buck
 
 function getresultsshort(range=1:maxbuckets; retries=10)
 	for numbuckets = range
-		if isfile("rmf-$case-$numbuckets-$retries.jld")
-			j = JLD.load("rmf-$case-$numbuckets-$retries.jld")
+		if isfile("results/rmf-$case-$numbuckets-$retries.jld")
+			j = JLD.load("results/rmf-$case-$numbuckets-$retries.jld")
 			fitquality[numbuckets] = j["fit"]
 			robustness[numbuckets] = j["robustness"]
 			println("Buckets = $numbuckets; Best objective function = $(fitquality[numbuckets]); Robustness = $(robustness[numbuckets])")
@@ -65,8 +65,8 @@ function getresults(numbuckets=5; retries=10)
 		e = true
 	end
 	if e 
-		if isfile("rmf-$case-$numbuckets-$retries.jld")
-			j = JLD.load("rmf-$case-$numbuckets-$retries.jld")
+		if isfile("results/rmf-$case-$numbuckets-$retries.jld")
+			j = JLD.load("results/rmf-$case-$numbuckets-$retries.jld")
 			buckets[numbuckets] = j["buckets"]
 			mixers[numbuckets] = j["mixers"]
 			fitquality[numbuckets] = j["fit"]
@@ -77,7 +77,7 @@ function getresults(numbuckets=5; retries=10)
 				species = j["uniquespecies"]
 				remap = DataStructures.OrderedDict(zip(species, 1:length(uniquespecies)))
 			else
-				dictold=JLD.load("dictionary20160224.jld","dictionary")
+				dictold=JLD.load("dictionary$(case).jld","dictionary")
 				remap = DataStructures.OrderedDict(zip(collect(keys(dictold)), 1:length(uniquespecies)))
 			end
 			for i in keys(order)
@@ -86,7 +86,7 @@ function getresults(numbuckets=5; retries=10)
 			buckets[numbuckets] = buckets[numbuckets][:,collect(values(order))]
 			w = true
 		else
-			error("Result file `rmf-$case-$numbuckets-$retries.jld` is missing ...\nExecute `execute($numbuckets)` to get the results!")
+			error("Result file `results/rmf-$case-$numbuckets-$retries.jld` is missing ...\nExecute `execute($numbuckets)` to get the results!")
 			return	
 		end
 	end
@@ -119,35 +119,38 @@ function getresults(numbuckets=5; retries=10)
 				Gadfly.Theme(default_point_size=20pt, major_label_font_size=14pt, minor_label_font_size=12pt, key_title_font_size=16pt, key_label_font_size=12pt),
 				Gadfly.Scale.ContinuousColorScale(Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red"))))
 	# filename, format = Mads.setimagefileformat(filename, format)
-	filename = "rmf-$case-$numbuckets-$retries-buckets.svg"
+	filename = "results/rmf-$case-$numbuckets-$retries-buckets.svg"
 	Gadfly.draw(Gadfly.SVG(filename,6inch,12inch), gbucket)
-	filename = "rmf-$case-$numbuckets-$retries-buckets.png"
+	filename = "results/rmf-$case-$numbuckets-$retries-buckets.png"
 	Gadfly.draw(Gadfly.PNG(filename,6inch,12inch), gbucket)
 	if w
-		warn("Results are loaded from external file `rmf-$case-$numbuckets-$retries.jld`...")
+		warn("Results are loaded from external file `results/rmf-$case-$numbuckets-$retries.jld`...")
 		warn("Execute `execute($numbuckets)` to rerun ...")
 	end
 end
 
-function loaddata(timestamp="20160202")
+function loaddata(timestamp="20160102")
 	global case=timestamp
-	dict=JLD.load("dictionary20160224ordered.jld","dictionary")
-	rawwells = readcsv("data/wells$(timestamp).csv")
-	rawpz = readcsv("data/pz$(timestamp).csv")
-	wells = [rawwells[2:end, 1]; rawpz[2:end, 1]]
-	dates = [rawwells[2:end, 2]; rawpz[2:end, 2]]
-	longnames = [rawwells[2:end, 4]; rawpz[2:end, 4]]
-	names = [rawwells[2:end, 5]; rawpz[2:end, 5]]
-	concs = [rawwells[2:end, 10]; rawpz[2:end, 10]]
+	dict=JLD.load("dictionary$(timestamp)ordered.jld","dictionary")
+	rawwells = readcsv("data/wells$(timestamp).csv")[2:end,[1,2,4,5,10]]
+	rawpz = readcsv("data/pz$(timestamp).csv")[2:end,[1,2,4,5,10]]
+	rawdata = [rawwells; rawpz]
+	wells = rawdata[:, 1]
+	dates = rawdata[:, 2]
+	longnames = rawdata[:, 3]
+	names = rawdata[:, 4]
+	concs = rawdata[:, 5]
 	@assert length(longnames) == length(names)
+	@assert length(names) == length(concs)
 	info("Total data record count $(length(longnames))")
+	# check the variable names
 	e = false
 	for i in 1:length(longnames)
 		if haskey(dict, longnames[i])
 			names[i] = dict[longnames[i]]
 		else
 			e = true
-			error("Variable name $(longnames[i]) is unknown!")
+			warn("Variable name $(longnames[i]) is unknown!")
 		end
 	end
 	if e
@@ -196,7 +199,13 @@ function loaddata(timestamp="20160202")
 	global concmatrix = concmatrix ./ datacount # gives NaN if there is no data, otherwise divides by the number of results
 	info("Concentration matrix:")
 	display([["Wells"; uniquespecies]'; uniquewells concmatrix])
-	return
+	coord, coordheader = readdlm("data/coord$(timestamp).dat", header=true)
+	for index = 1:length(uniquewells)
+		if indexin([uniquewells[index]], coord[:,1])[1] == 0
+			warn("Coordinates for well $(uniquewells[index]) are missing!")
+		end
+	end
+	global wellcoord = coord
 end
 
 function execute(range=1:maxbuckets; retries=10)
@@ -215,12 +224,15 @@ function execute(range=1:maxbuckets; retries=10)
 			buckets[numbuckets][:, i] *= maximum(concmatrix[:, i]) # undo the normalization
 		end
 		println("Buckets = $numbuckets; Best objective function = $(fitquality[numbuckets]); Robustness = $(robustness[numbuckets])")
-		JLD.save("rmf-$case-$numbuckets-$retries.jld", "wells", uniquewells, "species", uniquespecies, "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets])
+		JLD.save("results/rmf-$case-$numbuckets-$retries.jld", "wells", uniquewells, "species", uniquespecies, "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets])
 	end
 	return
 end
 
 info("Have fun ...")
+info("""loaddata(timestamp="20151202") - original fingerprint data set""")
+info("""loaddata(timestamp="20160102") - original fingerprint data set without pz wells""")
+info("""loaddata(timestamp="20160202") - new fingerprint data set without pz wells""")
 
 loaddata()
 
