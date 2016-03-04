@@ -12,14 +12,14 @@ buckets = Array(Array{Float64, 2}, maxbuckets)
 fitquality = Array(Float64, maxbuckets)
 robustness = Array(Float64, maxbuckets)
 
-#=
 dict = DataStructures.OrderedDict{AbstractString,AbstractString}(
 	"Chromium"=>"Cr",
-	"Chromium-53/52 Ratio"=>"δ53Cr",
+	"Chromium-53/52"=>"δ53Cr",
+	"Bromide"=>"Br-",
 	"Chloride"=>"Cl-",
 	"Chlorate"=>"ClO3",
 	"Perchlorate"=>"ClO4",
-	"Chlorine-36"=>"Cl36",
+	"Chlorine-36/Chlorine Ratio (e-15)"=>"Cl36",
 	"Tritium"=>"3H",
 	"Deuterium Ratio"=>"δ2H",
 	"Oxygen-18/Oxygen-16 Ratio"=>"δ18O",
@@ -29,15 +29,15 @@ dict = DataStructures.OrderedDict{AbstractString,AbstractString}(
 	"Sulfate"=>"SO4",
 	"Sulfur-34/Sulfur-32 Ratio (SO4)"=>"δ34S-SO4",
 	"Oxygen-18/Oxygen-16 Ratio from SO4"=>"δ18O-SO4",
-	"Iodine-129"=>"I129",
+	"Iodine-129/Iodine Ratio (e-15)"=>"I129",
+	"Fraction Modern Carbon (de-normalized)"=>"f14C",
 	"Dioxane[1,4-]"=>"Dioxane",
 	"Acetaminophen"=>"Acetam",
 	"Caffeine"=>"Caffe",
 	"Sulfamethoxazole"=>"Sulfame")
-JLD.save("dictionary20160224ordered.jld","dictionary",dict)
-=#
+JLD.save("dictionary20160202ordered.jld","dictionary",dict)
 
-info("rMF ...")
+info("rMF (Robust Matrix Factorization) ...")
 info("Execute `rMF.loaddata()` to get the data ...")
 info("Execute `rMF.execute(5, retries=50)` to get the results for the 5 bucket case with 50 reruns ...")
 info("Execute `rMF.getresults(5, retries=50)` to see the results for the 5 bucket case.")
@@ -143,19 +143,11 @@ function loaddata(timestamp="20160102")
 	@assert length(longnames) == length(names)
 	@assert length(names) == length(concs)
 	info("Total data record count $(length(longnames))")
-	# check the variable names
-	e = false
+	# set the "cool" (short) variable names
 	for i in 1:length(longnames)
 		if haskey(dict, longnames[i])
 			names[i] = dict[longnames[i]]
-		else
-			e = true
-			warn("Variable name $(longnames[i]) is unknown!")
 		end
-	end
-	if e
-		error("Quits!")
-		return
 	end
 	goodindices = 1:length(names)
 	# remove MCOI LAOI SCI R-6i TA-53i
@@ -172,13 +164,13 @@ function loaddata(timestamp="20160102")
 	# goodindices = filter(i->!contains(dates[i], "/2015"), goodindices) # keep only data from 2015
 	wells = wells[goodindices]
 	names = names[goodindices]
+	longnames = longnames[goodindices]
 	dates = dates[goodindices]
 	concs = concs[goodindices]
 	info("Processed data record count $(length(names))")
 	global uniquewells = unique(wells)
 	wells2i = Dict(zip(uniquewells, 1:length(uniquewells)))
 	dnames = collect(values(dict))
-	@assert length(dnames) == length(unique(names))
 	global uniquespecies = dnames
 	global uniquespecies_long = collect(keys(dict))
 	name2j = Dict(zip(uniquespecies, 1:length(uniquespecies)))
@@ -186,9 +178,11 @@ function loaddata(timestamp="20160102")
 	concmatrix = zeros(Float64, length(uniquewells), length(uniquespecies))
 	for index = 1:length(wells)
 		i = wells2i[wells[index]]
-		j = name2j[names[index]]
-		datacount[i, j] += 1
-		concmatrix[i, j] += concs[index]
+		if haskey(name2j, names[index])
+			j = name2j[names[index]]
+			datacount[i, j] += 1
+			concmatrix[i, j] += concs[index]
+		end
 	end
 	info("Observations count:")
 	display([["Wells"; uniquespecies]'; uniquewells datacount])
@@ -205,7 +199,21 @@ function loaddata(timestamp="20160102")
 			warn("Coordinates for well $(uniquewells[index]) are missing!")
 		end
 	end
+	info("Check species in the dictionary ...")
+	uniquelongnames = unique(longnames)
+	for i in 1:length(uniquelongnames)
+		if !haskey(dict, uniquelongnames[i])
+			warn("Species name $(uniquelongnames[i]) in the data set is not defined in the dictionary!")
+		end
+	end
+	info("Check species in the data set ...")
+	for i in 1:length(uniquespecies_long)
+		if indexin([uniquespecies_long[i]], uniquelongnames)[1] == 0
+			warn("Species name $(uniquespecies_long[i]) defined in the dictionary is missing in the data set!")
+		end
+	end
 	global wellcoord = coord
+	return
 end
 
 function execute(range=1:maxbuckets; retries=10)
@@ -229,10 +237,11 @@ function execute(range=1:maxbuckets; retries=10)
 	return
 end
 
-info("Have fun ...")
-info("""loaddata(timestamp="20151202") - original fingerprint data set""")
-info("""loaddata(timestamp="20160102") - original fingerprint data set without pz wells""")
-info("""loaddata(timestamp="20160202") - new fingerprint data set without pz wells""")
+info("Run to load different sets:")
+info("""rMF.loaddata("20151202") - original fingerprint data set""")
+info("""rMF.loaddata("20160102") - original fingerprint data set without pz wells""")
+info("""rMF.loaddata("20160202") - new fingerprint data set without pz wells""")
+info("Have fun ...\n")
 
 loaddata()
 
