@@ -12,6 +12,31 @@ buckets = Array(Array{Float64, 2}, maxbuckets)
 fitquality = Array(Float64, maxbuckets)
 robustness = Array(Float64, maxbuckets)
 
+#=
+dict = DataStructures.OrderedDict{AbstractString,AbstractString}(
+	"Chromium"=>"Cr",
+	"Chromium-53/52 Ratio"=>"δ53Cr",
+	"Chloride"=>"Cl-",
+	"Chlorate"=>"ClO3",
+	"Perchlorate"=>"ClO4",
+	"Chlorine-36"=>"Cl36",
+	"Tritium"=>"3H",
+	"Deuterium Ratio"=>"δ2H",
+	"Oxygen-18/Oxygen-16 Ratio"=>"δ18O",
+	"Nitrate-Nitrite as Nitrogen"=>"NO3",
+	"Nitrogen-15/Nitrogen-14 Ratio(NO3)"=>"δ15N",
+	"Oxygen-18/Oxygen-16 Ratio from Nitrate"=>"δ18O-NO3",
+	"Sulfate"=>"SO4",
+	"Sulfur-34/Sulfur-32 Ratio (SO4)"=>"δ34S-SO4",
+	"Oxygen-18/Oxygen-16 Ratio from SO4"=>"δ18O-SO4",
+	"Iodine-129"=>"I129",
+	"Dioxane[1,4-]"=>"Dioxane",
+	"Acetaminophen"=>"Acetam",
+	"Caffeine"=>"Caffe",
+	"Sulfamethoxazole"=>"Sulfame")
+JLD.save("dictionary20160224ordered.jld","dictionary",dict)
+=#
+
 info("rMF ...")
 info("Execute `rMF.loaddata()` to get the data ...")
 info("Execute `rMF.execute(5, retries=50)` to get the results for the 5 bucket case with 50 reruns ...")
@@ -22,8 +47,6 @@ function getresultsshort(range=1:maxbuckets; retries=10)
 	for numbuckets = range
 		if isfile("rmf-$case-$numbuckets-$retries.jld")
 			j = JLD.load("rmf-$case-$numbuckets-$retries.jld")
-			buckets[numbuckets] = j["buckets"]
-			mixers[numbuckets] = j["mixers"]
 			fitquality[numbuckets] = j["fit"]
 			robustness[numbuckets] = j["robustness"]
 			println("Buckets = $numbuckets; Best objective function = $(fitquality[numbuckets]); Robustness = $(robustness[numbuckets])")
@@ -48,6 +71,19 @@ function getresults(numbuckets=5; retries=10)
 			mixers[numbuckets] = j["mixers"]
 			fitquality[numbuckets] = j["fit"]
 			robustness[numbuckets] = j["robustness"]
+			order = DataStructures.OrderedDict(zip(uniquespecies_long, 1:length(uniquespecies)))
+			if haskey(j, "uniquewells") && haskey(j, "uniquespecies")
+				wells = j["uniquewells"]
+				species = j["uniquespecies"]
+				remap = DataStructures.OrderedDict(zip(species, 1:length(uniquespecies)))
+			else
+				dictold=JLD.load("dictionary20160224.jld","dictionary")
+				remap = DataStructures.OrderedDict(zip(collect(keys(dictold)), 1:length(uniquespecies)))
+			end
+			for i in keys(order)
+				order[i] = remap[i]
+			end
+			buckets[numbuckets] = buckets[numbuckets][:,collect(values(order))]
 			w = true
 		else
 			error("Result file `rmf-$case-$numbuckets-$retries.jld` is missing ...\nExecute `execute($numbuckets)` to get the results!")
@@ -57,33 +93,35 @@ function getresults(numbuckets=5; retries=10)
 	info("Fit quality: $(fitquality[numbuckets])")
 	info("Robustness: $(robustness[numbuckets])")
 	info("Match errors:")
-	display([["Wells"; uniquenames]'; uniquewells concmatrix - mixers[numbuckets] * buckets[numbuckets]]')
+	display([["Wells"; uniquespecies]'; uniquewells concmatrix - mixers[numbuckets] * buckets[numbuckets]]')
 	info("Relative match errors:")
-	display([["Wells"; uniquenames]'; uniquewells (concmatrix - mixers[numbuckets] * buckets[numbuckets])./concmatrix]')
+	display([["Wells"; uniquespecies]'; uniquewells (concmatrix - mixers[numbuckets] * buckets[numbuckets])./concmatrix]')
 	info("Max/min Species:")
 	maxs = maximum(buckets[numbuckets], 1)
 	mins = minimum(buckets[numbuckets], 1)
-	display([uniquenames maxs' mins'])
+	display([uniquespecies maxs' mins'])
 	info("Buckets:")
-	display([uniquenames buckets[numbuckets]'])
+	display([uniquespecies buckets[numbuckets]'])
 	info("Normalized buckets:")
 	nbuckets = ( buckets[numbuckets] .- mins ) ./ (maxs - mins)
-	display([uniquenames nbuckets'])
+	display([uniquespecies nbuckets'])
 	s = sum(nbuckets, 2)
 	i = sortperm(collect(s), rev=true)
 	info("Sorted normalized buckets:")
 	sbuckets = nbuckets[i,:]
-	display([uniquenames sbuckets'])
+	display([uniquespecies sbuckets'])
 	info("Sorted buckets:")
 	s2buckets = buckets[numbuckets][i,:]
-	display([uniquenames s2buckets'])
+	display([uniquespecies s2buckets'])
 	# sbuckets[sbuckets.<1e-6] = 1e-6
-	gbucket = Gadfly.spy(sbuckets', Gadfly.Scale.y_discrete(labels = i->uniquenames[i]), Gadfly.Scale.x_discrete,
+	gbucket = Gadfly.spy(sbuckets', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
 				Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"),
 				Gadfly.Theme(default_point_size=20pt, major_label_font_size=14pt, minor_label_font_size=12pt, key_title_font_size=16pt, key_label_font_size=12pt),
 				Gadfly.Scale.ContinuousColorScale(Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red"))))
-	filename = "rmf-$case-$numbuckets-$retries-buckets.png"
 	# filename, format = Mads.setimagefileformat(filename, format)
+	filename = "rmf-$case-$numbuckets-$retries-buckets.svg"
+	Gadfly.draw(Gadfly.SVG(filename,6inch,12inch), gbucket)
+	filename = "rmf-$case-$numbuckets-$retries-buckets.png"
 	Gadfly.draw(Gadfly.PNG(filename,6inch,12inch), gbucket)
 	if w
 		warn("Results are loaded from external file `rmf-$case-$numbuckets-$retries.jld`...")
@@ -93,7 +131,7 @@ end
 
 function loaddata(timestamp="20160202")
 	global case=timestamp
-	dict=JLD.load("dictionary20160224.jld","dictionary")
+	dict=JLD.load("dictionary20160224ordered.jld","dictionary")
 	rawwells = readcsv("data/wells$(timestamp).csv")
 	rawpz = readcsv("data/pz$(timestamp).csv")
 	wells = [rawwells[2:end, 1]; rawpz[2:end, 1]]
@@ -136,25 +174,28 @@ function loaddata(timestamp="20160202")
 	info("Processed data record count $(length(names))")
 	global uniquewells = unique(wells)
 	wells2i = Dict(zip(uniquewells, 1:length(uniquewells)))
-	global uniquenames = unique(names)
-	name2j = Dict(zip(uniquenames, 1:length(uniquenames)))
-	datacount = zeros(Int, length(uniquewells), length(uniquenames))
-	concmatrix = zeros(Float64, length(uniquewells), length(uniquenames))
+	dnames = collect(values(dict))
+	@assert length(dnames) == length(unique(names))
+	global uniquespecies = dnames
+	global uniquespecies_long = collect(keys(dict))
+	name2j = Dict(zip(uniquespecies, 1:length(uniquespecies)))
+	datacount = zeros(Int, length(uniquewells), length(uniquespecies))
+	concmatrix = zeros(Float64, length(uniquewells), length(uniquespecies))
 	for index = 1:length(wells)
 		i = wells2i[wells[index]]
 		j = name2j[names[index]]
 		datacount[i, j] += 1
 		concmatrix[i, j] += concs[index]
 	end
-	display([["Wells"; uniquenames]'; uniquewells concmatrix])
-	display([["Wells"; uniquenames]'; uniquewells datacount])
+	info("Observations count:")
+	display([["Wells"; uniquespecies]'; uniquewells datacount])
 	info("Observations per well:")
 	display([uniquewells sum(datacount,2)])
 	info("Observations per species:")
-	display([uniquenames sum(datacount,1)'])
+	display([uniquespecies sum(datacount,1)'])
 	global concmatrix = concmatrix ./ datacount # gives NaN if there is no data, otherwise divides by the number of results
 	info("Concentration matrix:")
-	display(concmatrix)
+	display([["Wells"; uniquespecies]'; uniquewells concmatrix])
 	return
 end
 
@@ -174,7 +215,7 @@ function execute(range=1:maxbuckets; retries=10)
 			buckets[numbuckets][:, i] *= maximum(concmatrix[:, i]) # undo the normalization
 		end
 		println("Buckets = $numbuckets; Best objective function = $(fitquality[numbuckets]); Robustness = $(robustness[numbuckets])")
-		JLD.save("rmf-$case-$numbuckets-$retries.jld", "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets])
+		JLD.save("rmf-$case-$numbuckets-$retries.jld", "wells", uniquewells, "species", uniquespecies, "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets])
 	end
 	return
 end
