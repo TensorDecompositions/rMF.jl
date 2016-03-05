@@ -3,8 +3,13 @@ module rMF
 import NMFk
 import JLD
 import DataStructures
+import SpatialAnalysis
+import PyCall
 using Gadfly
 using Colors
+using PyPlot
+
+@PyCall.pyimport matplotlib.patheffects as PathEffects
 
 maxbuckets = 10
 mixers = Array(Array{Float64, 2}, maxbuckets)
@@ -12,6 +17,7 @@ buckets = Array(Array{Float64, 2}, maxbuckets)
 fitquality = Array(Float64, maxbuckets)
 robustness = Array(Float64, maxbuckets)
 
+#=
 dict = DataStructures.OrderedDict{AbstractString,AbstractString}(
 	"Chromium"=>"Cr",
 	"Chromium-53/52"=>"δ53Cr",
@@ -36,6 +42,7 @@ dict = DataStructures.OrderedDict{AbstractString,AbstractString}(
 	"Caffeine"=>"Caffe",
 	"Sulfamethoxazole"=>"Sulfame")
 JLD.save("dictionary20160202ordered.jld","dictionary",dict)
+=#
 
 info("rMF (Robust Matrix Factorization) ...")
 info("Execute `rMF.loaddata()` to get the data ...")
@@ -86,7 +93,7 @@ function getresults(numbuckets=5; retries=10)
 			buckets[numbuckets] = buckets[numbuckets][:,collect(values(order))]
 			w = true
 		else
-			error("Result file `results/rmf-$case-$numbuckets-$retries.jld` is missing ...\nExecute `execute($numbuckets)` to get the results!")
+			error("Result file `results/rmf-$case-$numbuckets-$retries.jld` is missing ...\nExecute `rMF.execute($numbuckets)` to get the results!")
 			return	
 		end
 	end
@@ -105,13 +112,13 @@ function getresults(numbuckets=5; retries=10)
 	info("Normalized buckets:")
 	nbuckets = ( buckets[numbuckets] .- mins ) ./ (maxs - mins)
 	display([uniquespecies nbuckets'])
-	s = sum(nbuckets, 2)
-	i = sortperm(collect(s), rev=true)
+	source_weight = sum(nbuckets, 2)
+	source_index = sortperm(collect(source_weight), rev=true)
 	info("Sorted normalized buckets:")
-	sbuckets = nbuckets[i,:]
+	sbuckets = nbuckets[source_index,:]
 	display([uniquespecies sbuckets'])
 	info("Sorted buckets:")
-	s2buckets = buckets[numbuckets][i,:]
+	s2buckets = buckets[numbuckets][source_index,:]
 	display([uniquespecies s2buckets'])
 	# sbuckets[sbuckets.<1e-6] = 1e-6
 	gbucket = Gadfly.spy(sbuckets', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
@@ -123,9 +130,53 @@ function getresults(numbuckets=5; retries=10)
 	Gadfly.draw(Gadfly.SVG(filename,6inch,12inch), gbucket)
 	filename = "results/rmf-$case-$numbuckets-$retries-buckets.png"
 	Gadfly.draw(Gadfly.PNG(filename,6inch,12inch), gbucket)
+
+	goodindices = 1:length(uniquewells)
+	# remove deep screens
+	goodindices = filter(i->!contains(uniquewells[i], "_2"), goodindices)
+	wn = uniquewells[goodindices,:]
+	wn = map(i->replace(wn[i], "_1", ""), 1:length(wn))
+	wc = wellcoord[goodindices,:]
+	wm = mixers[numbuckets][goodindices,source_index]
+	grid_size = 100
+	mm_grid_size = grid_size * 5
+	minx = floor(minimum(wc, 1)[1] / mm_grid_size - .5) * mm_grid_size
+	maxx = ceil(maximum(wc, 1)[1] / mm_grid_size + .5) * mm_grid_size
+	miny = floor(minimum(wc, 1)[2] / mm_grid_size - .5) * mm_grid_size
+	maxy = ceil(maximum(wc, 1)[2] / mm_grid_size + .5) * mm_grid_size
+	xi = minx:grid_size:maxx
+	yi = miny:grid_size:maxy
+	zi = Array(Float64, length(xi), length(yi))
+	for s = 1:numbuckets
+		z = wm[:,s] 
+		z[z.<1e-6] = 1e-6
+		z = log10(z)
+		@assert length(wc[:,1]) == length(z)
+		@assert length(wc[:,1]) == length(unique(wc[:,1]))
+		zi = SpatialAnalysis.linear_interpolation(wc[:,1], wc[:,2], z, xi, yi)
+		zmin = minimum(zi)
+		zmin = -3
+		zmax = maximum(zi)
+		dz = ( zmax - zmin ) / 2
+		plt = PyPlot.figure(figsize=(9, 4))
+		PyPlot.imshow(zi, origin="lower", extent=[minx, maxx, miny, maxy], vmin=zmin-dz, vmax=zmax+dz, cmap="jet")
+		PyPlot.colorbar(shrink=0.5, cmap="jet")
+		PyPlot.clim(zmin, zmax)
+		PyPlot.title("Source $s")
+		PyPlot.scatter(wc[:,1], wc[:,2], marker="o", color="black", c=z, s=70, cmap="jet")
+		PyPlot.scatter(wc[:,1], wc[:,2], marker="o", color="white", c=z, s=68, cmap="jet")
+		PyPlot.clim(zmin, zmax)
+		for i = 1:length(wn)
+			PyPlot.annotate(wn[i], xy=(wc[i,1], wc[i,2]), xytext=(-2, 2), fontsize=8, color="white", textcoords="offset points", ha="right", va="bottom", path_effects=[PathEffects.withStroke(linewidth=1, foreground="black")])
+		end
+		PyPlot.yticks([538500, 539500], ["538500", "539500"], rotation="vertical")
+		PyPlot.tight_layout()
+		PyPlot.savefig("results/rmf-$case-$numbuckets-$retries-source-$s.png")
+		PyPlot.close()
+	end
 	if w
 		warn("Results are loaded from external file `results/rmf-$case-$numbuckets-$retries.jld`...")
-		warn("Execute `execute($numbuckets)` to rerun ...")
+		warn("Execute `rMF.execute($numbuckets)` to rerun ...")
 	end
 end
 
@@ -194,9 +245,14 @@ function loaddata(timestamp="20160102")
 	info("Concentration matrix:")
 	display([["Wells"; uniquespecies]'; uniquewells concmatrix])
 	coord, coordheader = readdlm("data/coord$(timestamp).dat", header=true)
+	global wellcoord = Array(Float64, length(uniquewells), 2)
 	for index = 1:length(uniquewells)
-		if indexin([uniquewells[index]], coord[:,1])[1] == 0
+		i = indexin([uniquewells[index]], coord[:,1])[1]
+		if i == 0
 			warn("Coordinates for well $(uniquewells[index]) are missing!")
+		else
+			wellcoord[index,1] = coord[i,2]
+			wellcoord[index,2] = coord[i,3]
 		end
 	end
 	info("Check species in the dictionary ...")
@@ -212,7 +268,6 @@ function loaddata(timestamp="20160102")
 			warn("Species name $(uniquespecies_long[i]) defined in the dictionary is missing in the data set!")
 		end
 	end
-	global wellcoord = coord
 	return
 end
 
@@ -240,8 +295,9 @@ end
 info("Run to load different sets:")
 info("""rMF.loaddata("20151202") - original fingerprint data set""")
 info("""rMF.loaddata("20160102") - original fingerprint data set without pz wells""")
-info("""rMF.loaddata("20160202") - new fingerprint data set without pz wells""")
-info("Have fun ...\n")
+info("""rMF.loaddata("20160202") - new fingerprint data set with pz wells""")
+info("""rMF.loaddata("20160302") - new fingerprint data set without pz wells""")
+info("Have fun ...")
 
 loaddata()
 
