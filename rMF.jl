@@ -16,6 +16,7 @@ mixers = Array(Array{Float64, 2}, maxbuckets)
 buckets = Array(Array{Float64, 2}, maxbuckets)
 fitquality = Array(Float64, maxbuckets)
 robustness = Array(Float64, maxbuckets)
+dict = Dict()
 
 #=
 dict = DataStructures.OrderedDict{AbstractString,AbstractString}(
@@ -144,7 +145,11 @@ function getresults(numbuckets=5; retries=10)
 	goodindices = filter(i->!contains(uniquewells[i], "_2"), goodindices)
 	wn = uniquewells[goodindices,:]
 	wn = map(i->replace(wn[i], "_1", ""), 1:length(wn))
-	wc = wellcoord[goodindices,:]
+	wc = wellcoord[goodindices, :]
+	if length(wc) == 0
+		warn("No well coordinates")
+		return
+	end
 	wm = mixers[numbuckets][goodindices,source_index]
 	grid_size = 100
 	mm_grid_size = grid_size * 5
@@ -156,11 +161,11 @@ function getresults(numbuckets=5; retries=10)
 	yi = miny:grid_size:maxy
 	zi = Array(Float64, length(xi), length(yi))
 	for s = 1:numbuckets
-		z = wm[:,s] 
+		z = wm[:, s] 
 		z[z.<1e-6] = 1e-6
 		z = log10(z)
 		@assert length(wc[:,1]) == length(z)
-		@assert length(wc[:,1]) == length(unique(wc[:,1]))
+		@assert length(wc[:,1]) == length(unique(wc[:,1])) || length(wc[:,2]) == length(unique(wc[:,2]))
 		zi = SpatialAnalysis.linear_interpolation(wc[:,1], wc[:,2], z, xi, yi)
 		zmin = minimum(zi)
 		zmin = -3
@@ -193,12 +198,13 @@ function loaddata(timestamp="20160102")
 	if timestamp == "test"
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "δA"]
-		global concmatrix = [[1.,2.] [2.,4.]]
+		global concmatrix = [[1., 1.] [2., 4.]]
+		global wellcoord = [[0., 0.] [0., 100.]]
 		info("Concentration matrix:")
 		display([["Wells"; uniquespecies]'; uniquewells concmatrix])
 		return
 	end
-	dict=JLD.load("dictionary$(timestamp)ordered.jld","dictionary")
+	global dict = JLD.load("dictionary$(timestamp)ordered.jld","dictionary")
 	# mixes = JLD.load("mixtures$(timestamp).jld","mixtures")
 	rawwells = readcsv("data/wells$(timestamp).csv")[2:end,[1,2,4,5,10]]
 	rawpz = readcsv("data/pz$(timestamp).csv")[2:end,[1,2,4,5,10]]
