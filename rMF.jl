@@ -99,6 +99,8 @@ function getresults(numbuckets=5; retries=10)
 	end
 	info("Fit quality: $(fitquality[numbuckets])")
 	info("Robustness: $(robustness[numbuckets])")
+	info("Predictions:")
+	display([["Wells"; uniquespecies]'; uniquewells  mixers[numbuckets] * buckets[numbuckets]]')
 	info("Match errors:")
 	display([["Wells"; uniquespecies]'; uniquewells concmatrix - mixers[numbuckets] * buckets[numbuckets]]')
 	info("Relative match errors:")
@@ -107,10 +109,16 @@ function getresults(numbuckets=5; retries=10)
 	maxs = maximum(buckets[numbuckets], 1)
 	mins = minimum(buckets[numbuckets], 1)
 	display([uniquespecies maxs' mins'])
+	info("Mixers:")
+	display([uniquewells mixers[numbuckets]])
 	info("Buckets:")
 	display([uniquespecies buckets[numbuckets]'])
 	info("Normalized buckets:")
-	nbuckets = ( buckets[numbuckets] .- mins ) ./ (maxs - mins)
+	if norm(maxs - mins) > 0.0
+		nbuckets = ( buckets[numbuckets] .- mins ) ./ (maxs - mins)
+	else
+		nbuckets = buckets[numbuckets] ./ maxs
+	end
 	display([uniquespecies nbuckets'])
 	source_weight = sum(nbuckets, 2)
 	source_index = sortperm(collect(source_weight), rev=true)
@@ -182,7 +190,16 @@ end
 
 function loaddata(timestamp="20160102")
 	global case=timestamp
+	if timestamp == "test"
+		global uniquewells = ["W1", "W2"]
+		global uniquespecies = ["A", "δA"]
+		global concmatrix = [[1.,2.] [2.,4.]]
+		info("Concentration matrix:")
+		display([["Wells"; uniquespecies]'; uniquewells concmatrix])
+		return
+	end
 	dict=JLD.load("dictionary$(timestamp)ordered.jld","dictionary")
+	# mixes = JLD.load("mixtures$(timestamp).jld","mixtures")
 	rawwells = readcsv("data/wells$(timestamp).csv")[2:end,[1,2,4,5,10]]
 	rawpz = readcsv("data/pz$(timestamp).csv")[2:end,[1,2,4,5,10]]
 	rawdata = [rawwells; rawpz]
@@ -276,7 +293,7 @@ function execute(range=1:maxbuckets; retries=10)
 		warn("Execute `loaddata()` first!")
 		return
 	end
-	calibrationtargets = copy(concmatrix)
+	calibrationtargets = deepcopy(concmatrix)
 	for i = 1:size(calibrationtargets, 2)
 		calibrationtargets[:, i] /= maximum(concmatrix[:, i]) # normalize
 	end
