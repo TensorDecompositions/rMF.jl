@@ -140,8 +140,38 @@ function getresults(numbuckets=5; retries=10)
 	filename = "results/rmf-$case-$numbuckets-$retries-buckets.png"
 	Gadfly.draw(Gadfly.PNG(filename,6inch,12inch), gbucket)
 
-	goodindices = 1:length(uniquewells)
+	info("Sorted mixers:")
+	wells2i = Dict(zip(uniquewells, 1:length(uniquewells)))
+	# wellnameorder = readdlm("orderedwells-number.dat")
+	wellnameorder = readdlm("orderedwells-WE.dat")
+	wellorder = zeros(Int, length(uniquewells))
+	for i in 1:length(wellorder)
+		if haskey(wells2i, wellnameorder[i])
+			wellorder[i] = wells2i[wellnameorder[i]]
+		else
+			warn("Well $(wellnameorder[i]) is missing!")
+		end
+	end
+	bi = wellorder[wellorder.<0]
+	if length(bi) > 0
+		@show bi
+		warn("Well(s) $(wellnameorder[bi]) is not accounted!")
+	end
+
+	smixers = mixers[numbuckets][wellorder,source_index]
+	display([uniquewells smixers])
+	gmixers = Gadfly.spy(smixers, Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
+				Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"),
+				Gadfly.Theme(default_point_size=20pt, major_label_font_size=14pt, minor_label_font_size=12pt, key_title_font_size=16pt, key_label_font_size=12pt),
+				Gadfly.Scale.ContinuousColorScale(Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red"))))
+	# filename, format = Mads.setimagefileformat(filename, format)
+	filename = "results/rmf-$case-$numbuckets-$retries-mixers.svg"
+	Gadfly.draw(Gadfly.SVG(filename,6inch,12inch), gmixers)
+	filename = "results/rmf-$case-$numbuckets-$retries-mixers.png"
+	Gadfly.draw(Gadfly.PNG(filename,6inch,12inch), gmixers)
+
 	# remove deep screens
+	goodindices = 1:length(uniquewells)
 	goodindices = filter(i->!contains(uniquewells[i], "_2"), goodindices)
 	wn = uniquewells[goodindices,:]
 	wn = map(i->replace(wn[i], "_1", ""), 1:length(wn))
@@ -150,7 +180,6 @@ function getresults(numbuckets=5; retries=10)
 		warn("No well coordinates")
 		return
 	end
-	wm = mixers[numbuckets][goodindices,source_index]
 	grid_size = 100
 	mm_grid_size = grid_size * 5
 	minx = floor(minimum(wc, 1)[1] / mm_grid_size - .5) * mm_grid_size
@@ -160,6 +189,7 @@ function getresults(numbuckets=5; retries=10)
 	xi = minx:grid_size:maxx
 	yi = miny:grid_size:maxy
 	zi = Array(Float64, length(xi), length(yi))
+	wm = mixers[numbuckets][goodindices,source_index]
 	for s = 1:numbuckets
 		z = wm[:, s] 
 		z[z.<1e-6] = 1e-6
@@ -186,6 +216,46 @@ function getresults(numbuckets=5; retries=10)
 		PyPlot.tight_layout()
 		PyPlot.savefig("results/rmf-$case-$numbuckets-$retries-source-$s.png")
 		PyPlot.close()
+	end
+	selectedspecies =[1,3,5,7]
+	swm = map(i->rMF.mixers[5][goodindices,i] * rMF.buckets[5][i,selectedspecies], source_index)
+	for b = 1:numbuckets
+		for s = 1:length(selectedspecies)
+			z = swm[b][:, s]
+			zmin = minimum(z)
+			zmax = maximum(z)
+			current_species = uniquespecies[selectedspecies[s]]
+			info("Source $b: $current_species")
+			info("Min = $(zmin)")
+			info("Max = $(zmax)")
+			# z[z.<1e-6] = 1e-6
+			z = log10(z)
+			@assert length(wc[:,1]) == length(z)
+			@assert length(wc[:,1]) == length(unique(wc[:,1])) || length(wc[:,2]) == length(unique(wc[:,2]))
+			zi = SpatialAnalysis.linear_interpolation(wc[:,1], wc[:,2], z, xi, yi)
+			zmin = minimum(zi)
+			zmin = -3
+			zmax = maximum(zi)
+			if zmin > zmax
+				zmin = minimum(zi)
+			end
+			dz = ( zmax - zmin ) / 2
+			plt = PyPlot.figure(figsize=(9, 4))
+			PyPlot.imshow(zi, origin="lower", extent=[minx, maxx, miny, maxy], vmin=zmin-dz, vmax=zmax+dz, cmap="jet")
+			PyPlot.colorbar(shrink=0.5, cmap="jet")
+			PyPlot.clim(zmin, zmax)
+			PyPlot.title("Source $b: $current_species")
+			PyPlot.scatter(wc[:,1], wc[:,2], marker="o", color="black", c=z, s=70, cmap="jet")
+			PyPlot.scatter(wc[:,1], wc[:,2], marker="o", color="white", c=z, s=68, cmap="jet")
+			PyPlot.clim(zmin, zmax)
+			for i = 1:length(wn)
+				PyPlot.annotate(wn[i], xy=(wc[i,1], wc[i,2]), xytext=(-2, 2), fontsize=8, color="white", textcoords="offset points", ha="right", va="bottom", path_effects=[PathEffects.withStroke(linewidth=1, foreground="black")])
+			end
+			PyPlot.yticks([538500, 539500], ["538500", "539500"], rotation="vertical")
+			PyPlot.tight_layout()
+			PyPlot.savefig("results/rmf-$case-$numbuckets-$retries-source-$b-$current_species.png")
+			PyPlot.close()
+		end
 	end
 	if w
 		warn("Results are loaded from external file `results/rmf-$case-$numbuckets-$retries.jld`...")
