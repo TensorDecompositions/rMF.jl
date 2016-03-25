@@ -14,6 +14,7 @@ using PyPlot
 maxbuckets = 10
 mixers = Array(Array{Float64, 2}, maxbuckets)
 buckets = Array(Array{Float64, 2}, maxbuckets)
+delbuckets = Array(Array{Float64, 2}, maxbuckets)
 fitquality = Array(Float64, maxbuckets)
 robustness = Array(Float64, maxbuckets)
 dict = Dict()
@@ -76,6 +77,9 @@ function getresults(numbuckets=5; retries=10)
 		if isfile("results/rmf-$case-$numbuckets-$retries.jld")
 			j = JLD.load("results/rmf-$case-$numbuckets-$retries.jld")
 			buckets[numbuckets] = j["buckets"]
+			if haskey(j, "delbuckets")
+				delbuckets[numbuckets] = j["delbuckets"]
+			end
 			mixers[numbuckets] = j["mixers"]
 			fitquality[numbuckets] = j["fit"]
 			robustness[numbuckets] = j["robustness"]
@@ -100,12 +104,46 @@ function getresults(numbuckets=5; retries=10)
 	end
 	info("Fit quality: $(fitquality[numbuckets])")
 	info("Robustness: $(robustness[numbuckets])")
+
+	wells2i = Dict(zip(uniquewells, 1:length(uniquewells)))
+	# wellnameorder = readdlm("orderedwells-number.dat")
+	wellnameorder = readdlm("orderedwells-WE.dat")
+	wellorder = zeros(Int, length(uniquewells))
+	for i in 1:length(wellorder)
+		if haskey(wells2i, wellnameorder[i])
+			wellorder[i] = wells2i[wellnameorder[i]]
+		else
+			warn("Well $(wellnameorder[i]) is missing!")
+		end
+	end
+	bi = wellorder[wellorder.<0]
+	if length(bi) > 0
+		@show bi
+		warn("Well(s) $(wellnameorder[bi]) is not accounted!")
+	end
+	predictions = mixers[numbuckets] * buckets[numbuckets]
+	errors = concmatrix - predictions
+	relerrors = (concmatrix - predictions)./concmatrix
+
+	f = open("results/rmf-$case-data.dat", "w")
+	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder concmatrix[wellorder, :]]')
+	close(f)
+
 	info("Predictions:")
-	display([["Wells"; uniquespecies]'; uniquewells  mixers[numbuckets] * buckets[numbuckets]]')
+	display([["Wells"; uniquespecies]'; wellnameorder predictions[wellorder, :]]')
+	f = open("results/rmf-$case-$numbuckets-$retries-predictions.dat", "w")
+	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder predictions[wellorder, :]]')
+	close(f)
 	info("Match errors:")
-	display([["Wells"; uniquespecies]'; uniquewells concmatrix - mixers[numbuckets] * buckets[numbuckets]]')
+	display([["Wells"; uniquespecies]'; wellnameorder errors[wellorder, :]]')
+	f = open("results/rmf-$case-$numbuckets-$retries-errors.dat", "w")
+	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder errors[wellorder, :]]')
+	close(f)
 	info("Relative match errors:")
-	display([["Wells"; uniquespecies]'; uniquewells (concmatrix - mixers[numbuckets] * buckets[numbuckets])./concmatrix]')
+	display([["Wells"; uniquespecies]'; wellnameorder relerrors[wellorder, :]]')
+	f = open("results/rmf-$case-$numbuckets-$retries-relerrors.dat", "w")
+	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder relerrors[wellorder, :]]')
+	close(f)
 	info("Max/min Species:")
 	maxs = maximum(buckets[numbuckets], 1)
 	mins = minimum(buckets[numbuckets], 1)
@@ -141,25 +179,8 @@ function getresults(numbuckets=5; retries=10)
 	Gadfly.draw(Gadfly.PNG(filename,6inch,12inch), gbucket)
 
 	info("Sorted mixers:")
-	wells2i = Dict(zip(uniquewells, 1:length(uniquewells)))
-	# wellnameorder = readdlm("orderedwells-number.dat")
-	wellnameorder = readdlm("orderedwells-WE.dat")
-	wellorder = zeros(Int, length(uniquewells))
-	for i in 1:length(wellorder)
-		if haskey(wells2i, wellnameorder[i])
-			wellorder[i] = wells2i[wellnameorder[i]]
-		else
-			warn("Well $(wellnameorder[i]) is missing!")
-		end
-	end
-	bi = wellorder[wellorder.<0]
-	if length(bi) > 0
-		@show bi
-		warn("Well(s) $(wellnameorder[bi]) is not accounted!")
-	end
-
-	smixers = mixers[numbuckets][wellorder,source_index]
-	display([uniquewells smixers])
+	smixers = mixers[numbuckets][wellorder, source_index]
+	display([wellnameorder smixers])
 	gmixers = Gadfly.spy(smixers, Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
 				Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"),
 				Gadfly.Theme(default_point_size=20pt, major_label_font_size=14pt, minor_label_font_size=12pt, key_title_font_size=16pt, key_label_font_size=12pt),
@@ -170,7 +191,8 @@ function getresults(numbuckets=5; retries=10)
 	filename = "results/rmf-$case-$numbuckets-$retries-mixers.png"
 	Gadfly.draw(Gadfly.PNG(filename,6inch,12inch), gmixers)
 
-	# remove deep screens
+	return
+# remove deep screens
 	goodindices = 1:length(uniquewells)
 	goodindices = filter(i->!contains(uniquewells[i], "_2"), goodindices)
 	wn = uniquewells[goodindices,:]
