@@ -5,9 +5,9 @@ import JLD
 import DataStructures
 import SpatialAnalysis
 import PyCall
-using Gadfly
-using Colors
-using PyPlot
+import Gadfly
+import Colors
+import PyPlot
 
 @PyCall.pyimport matplotlib.patheffects as PathEffects
 
@@ -89,8 +89,12 @@ function getresults(numbuckets=5; retries=10)
 				species = j["uniquespecies"]
 				remap = DataStructures.OrderedDict(zip(species, 1:length(uniquespecies)))
 			else
-				dictold=JLD.load("dictionary$(case).jld","dictionary")
-				remap = DataStructures.OrderedDict(zip(collect(keys(dictold)), 1:length(uniquespecies)))
+				if isfile("dictionary$(case).jld")
+					dictold=JLD.load("dictionary$(case).jld","dictionary")
+					remap = DataStructures.OrderedDict(zip(collect(keys(dictold)), 1:length(uniquespecies)))
+				else
+					remap = DataStructures.OrderedDict(zip(uniquespecies_long, 1:length(uniquespecies)))
+				end
 			end
 			for i in keys(order)
 				order[i] = remap[i]
@@ -107,23 +111,34 @@ function getresults(numbuckets=5; retries=10)
 
 	wells2i = Dict(zip(uniquewells, 1:length(uniquewells)))
 	# wellnameorder = readdlm("orderedwells-number.dat")
-	wellnameorder = readdlm("orderedwells-WE.dat")
-	wellorder = zeros(Int, length(uniquewells))
-	for i in 1:length(wellorder)
-		if haskey(wells2i, wellnameorder[i])
-			wellorder[i] = wells2i[wellnameorder[i]]
-		else
-			warn("Well $(wellnameorder[i]) is missing!")
+	if isfile("orderedwells-WE.dat")
+		wellnameorder = readdlm("orderedwells-WE.dat")
+		wellorder = zeros(Int, length(wellnameorder))
+		for i in 1:length(wellorder)
+			if haskey(wells2i, wellnameorder[i])
+				wellorder[i] = wells2i[wellnameorder[i]]
+			end
 		end
+		wellmissing = wellorder .== 0
+		indexmissing = find(wellmissing)
+		wellavailable = wellorder .!= 0
+		indexavailale = find(wellavailable)
+		if length(indexmissing) > 0 && length(indexavailale) != 0
+			warn("Well(s) $(wellnameorder[indexmissing]) is not accounted!")
+		else
+			wellorder = 1:length(uniquewells)
+			wellnameorder = uniquewells
+		end
+	else
+		wellorder = 1:length(uniquewells)
+		wellnameorder = uniquewells		
 	end
-	bi = wellorder[wellorder.<0]
-	if length(bi) > 0
-		@show bi
-		warn("Well(s) $(wellnameorder[bi]) is not accounted!")
-	end
+
 	predictions = mixers[numbuckets] * buckets[numbuckets]
+	@show concmatrix
+	@show predictions
 	errors = concmatrix - predictions
-	relerrors = (concmatrix - predictions)./concmatrix
+	relerrors = errors ./ concmatrix
 
 	f = open("results/rmf-$case-data.dat", "w")
 	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder concmatrix[wellorder, :]]')
@@ -144,7 +159,7 @@ function getresults(numbuckets=5; retries=10)
 	f = open("results/rmf-$case-$numbuckets-$retries-relerrors.dat", "w")
 	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder relerrors[wellorder, :]]')
 	close(f)
-	info("Max/min Species:")
+	info("Max/min Species in Buckets:")
 	maxs = maximum(buckets[numbuckets], 1)
 	mins = minimum(buckets[numbuckets], 1)
 	display([uniquespecies maxs' mins'])
@@ -153,11 +168,12 @@ function getresults(numbuckets=5; retries=10)
 	info("Buckets:")
 	display([uniquespecies buckets[numbuckets]'])
 	info("Normalized buckets:")
-	if norm(maxs - mins) > 0.0
-		nbuckets = ( buckets[numbuckets] .- mins ) ./ (maxs - mins)
-	else
-		nbuckets = buckets[numbuckets] ./ maxs
+	for i=1:length(maxs)
+		if maxs[i] == mins[i]
+			mins[i] = 0
+		end
 	end
+	nbuckets = (buckets[numbuckets] .- mins) ./ (maxs - mins)
 	display([uniquespecies nbuckets'])
 	source_weight = sum(nbuckets, 2)
 	source_index = sortperm(collect(source_weight), rev=true)
@@ -170,26 +186,26 @@ function getresults(numbuckets=5; retries=10)
 	# sbuckets[sbuckets.<1e-6] = 1e-6
 	gbucket = Gadfly.spy(sbuckets', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
 				Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"),
-				Gadfly.Theme(default_point_size=20pt, major_label_font_size=14pt, minor_label_font_size=12pt, key_title_font_size=16pt, key_label_font_size=12pt),
-				Gadfly.Scale.ContinuousColorScale(Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red"))))
+				Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
+				Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red"))))
 	# filename, format = Mads.setimagefileformat(filename, format)
 	filename = "results/rmf-$case-$numbuckets-$retries-buckets.svg"
-	Gadfly.draw(Gadfly.SVG(filename,6inch,12inch), gbucket)
+	Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
 	filename = "results/rmf-$case-$numbuckets-$retries-buckets.png"
-	Gadfly.draw(Gadfly.PNG(filename,6inch,12inch), gbucket)
+	Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
 
 	info("Sorted mixers:")
 	smixers = mixers[numbuckets][wellorder, source_index]
 	display([wellnameorder smixers])
 	gmixers = Gadfly.spy(smixers, Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
 				Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"),
-				Gadfly.Theme(default_point_size=20pt, major_label_font_size=14pt, minor_label_font_size=12pt, key_title_font_size=16pt, key_label_font_size=12pt),
-				Gadfly.Scale.ContinuousColorScale(Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red"))))
+				Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
+				Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red"))))
 	# filename, format = Mads.setimagefileformat(filename, format)
 	filename = "results/rmf-$case-$numbuckets-$retries-mixers.svg"
-	Gadfly.draw(Gadfly.SVG(filename,6inch,12inch), gmixers)
+	Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
 	filename = "results/rmf-$case-$numbuckets-$retries-mixers.png"
-	Gadfly.draw(Gadfly.PNG(filename,6inch,12inch), gmixers)
+	Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
 
 	return
 # remove deep screens
@@ -285,21 +301,54 @@ function getresults(numbuckets=5; retries=10)
 	end
 end
 
-function loaddata(timestamp="20160102")
-	global case=timestamp
-	if timestamp == "test"
+function loaddata(filename::AbstractString, casename::AbstractString)
+	global case = casename
+	if filename == "test"
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "δA"]
+		global uniquespecies_long = uniquespecies
 		global concmatrix = [[1., 1.] [2., 4.]]
 		global wellcoord = [[0., 0.] [0., 100.]]
 		info("Concentration matrix:")
 		display([["Wells"; uniquespecies]'; uniquewells concmatrix])
 		return
 	end
-	global dict = JLD.load("dictionary$(timestamp)ordered.jld","dictionary")
+	if filename == "test23"
+		global uniquewells = ["W1", "W2"]
+		global uniquespecies = ["A", "B", "C"]
+		global uniquespecies_long = uniquespecies
+		global concmatrix = [[1., 1.] [2., 4.] [2., 2.]]
+		global wellcoord = [[0., 0.] [0., 100.]]
+		info("Concentration matrix:")
+		display([["Wells"; uniquespecies]'; uniquewells concmatrix])
+		return
+	end
+	rawdata = readcsv(filename)
+	global uniquewells = rawdata[2:end, 1]
+	global uniquespecies = rawdata[1, 2:end]'
+	global uniquespecies_long = uniquespecies
+	global concmatrix = rawdata[2:end, 2:end]
+	info("Species ($(length(uniquespecies)))")
+	display(uniquespecies)
+	info("Wells ($(length(uniquewells)))")
+	display(uniquewells)
+	info("Concentration matrix:")
+	concmatrix[concmatrix .== " "] = NaN
+	concmatrix[concmatrix .== ""] = NaN
+	concmatrix = Array{Float32}(concmatrix)
+	display([["Wells"; uniquespecies]'; uniquewells concmatrix])
+	return
+end
+
+function loaddata(probstamp::Int64=20160102, dictstamp::Int64=0)
+	if dictstamp == 0
+		dictstamp = probstamp
+	end
+	global case = probstamp
+	global dict = JLD.load("dictionary$(dictstamp)ordered.jld","dictionary")
 	# mixes = JLD.load("mixtures$(timestamp).jld","mixtures")
-	rawwells = readcsv("data/wells$(timestamp).csv")[2:end,[1,2,4,5,10]]
-	rawpz = readcsv("data/pz$(timestamp).csv")[2:end,[1,2,4,5,10]]
+	rawwells = readcsv("data/wells$(probstamp).csv")[2:end,[1,2,4,5,10]]
+	rawpz = readcsv("data/pz$(probstamp).csv")[2:end,[1,2,4,5,10]]
 	rawdata = [rawwells; rawpz]
 	wells = rawdata[:, 1]
 	dates = rawdata[:, 2]
@@ -350,6 +399,10 @@ function loaddata(timestamp="20160102")
 			concmatrix[i, j] += concs[index]
 		end
 	end
+	info("Species ($(length(uniquespecies)))")
+	display(uniquespecies)
+	info("Wells ($(length(uniquewells)))")
+	display(uniquewells)
 	info("Observations count:")
 	display([["Wells"; uniquespecies]'; uniquewells datacount])
 	info("Observations per well:")
@@ -359,7 +412,7 @@ function loaddata(timestamp="20160102")
 	global concmatrix = concmatrix ./ datacount # gives NaN if there is no data, otherwise divides by the number of results
 	info("Concentration matrix:")
 	display([["Wells"; uniquespecies]'; uniquewells concmatrix])
-	coord, coordheader = readdlm("data/coord$(timestamp).dat", header=true)
+	coord, coordheader = readdlm("data/coord$(probstamp).dat", header=true)
 	global wellcoord = Array(Float64, length(uniquewells), 2)
 	for index = 1:length(uniquewells)
 		i = indexin([uniquewells[index]], coord[:,1])[1]
@@ -386,20 +439,29 @@ function loaddata(timestamp="20160102")
 	return
 end
 
-function execute(range=1:maxbuckets; retries=10)
+"""
+Perform rMF analyses
+"""
+function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtures::Bool=true, matchdelta::Bool=false, quiet::Bool=true)
 	if sizeof(concmatrix) == 0
-		warn("Execute `loaddata()` first!")
+		warn("Execute `rMF.loaddata()` first!")
 		return
 	end
-	calibrationtargets = deepcopy(concmatrix)
-	for i = 1:size(calibrationtargets, 2)
-		calibrationtargets[:, i] /= maximum(concmatrix[:, i]) # normalize
-	end
+	min = minimum(concmatrix, 1)
+	max = maximum(concmatrix, 1)
+	calibrationtargets = (concmatrix .- min) ./ (max - min) # normalize
+	# calibrationtargets = concmatrix ./ max # normalize
 	for numbuckets = range
 		# NMFk using mixmatch 
-		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(calibrationtargets, retries, numbuckets; mixmatch=true, matchdelta=false, quiet=true, regularizationweight=1e-3)
-		for i = 1:size(concmatrix, 2)
-			buckets[numbuckets][:, i] *= maximum(concmatrix[:, i]) # undo the normalization
+		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(calibrationtargets, retries, numbuckets; mixmatch=mixmatch, matchdelta=matchdelta, mixtures=mixtures, quiet=quiet, regularizationweight=1e-3)
+		# buckets[numbuckets] = buckets[numbuckets] .* max # undo the normalization
+		buckets[numbuckets] = buckets[numbuckets] .* (max - min) .+ min # undo the normalization
+		mixsum = sum(mixers[numbuckets], 2)
+		index = find(mixsum .> 1.1) | find(mixsum .< 0.9)
+		if length(index) > 0
+			warn("The mixers do not add to 1")
+			@show sum(mixers[numbuckets], 2)
+			display(mixers[numbuckets])
 		end
 		println("Buckets = $numbuckets; Best objective function = $(fitquality[numbuckets]); Robustness = $(robustness[numbuckets])")
 		JLD.save("results/rmf-$case-$numbuckets-$retries.jld", "wells", uniquewells, "species", uniquespecies, "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets])
@@ -407,13 +469,20 @@ function execute(range=1:maxbuckets; retries=10)
 	return
 end
 
-info("Run to load different sets:")
-info("""rMF.loaddata("20151202") - original fingerprint data set""")
-info("""rMF.loaddata("20160102") - original fingerprint data set without pz wells""")
-info("""rMF.loaddata("20160202") - new fingerprint data set with pz wells""")
-info("""rMF.loaddata("20160302") - new fingerprint data set without pz wells""")
+info("Use `rMF.loaddata()` to load different data sets:")
+info("rMF.loaddata(20151202) - original fingerprint data set")
+info("rMF.loaddata(20160102) - original fingerprint data set without pz wells")
+info("rMF.loaddata(20160202) - new fingerprint data set with pz wells")
+info("rMF.loaddata(20160302) - new fingerprint data set without pz wells")
+info("""rMF.loaddata("data/Fingerprint\ data\ TA16\ 20160721.csv", "ta16-20160721")""")
+info("")
+info("Use `rMF.execute()` to perform rMF analyses:")
+info("rMF.execute(2:4, retries=100)")
+info("")
 info("Have fun ...")
 
-loaddata()
+# cd(Pkg.dir("rMF") * "/AquiferMixing")
+
+# loaddata()
 
 end
