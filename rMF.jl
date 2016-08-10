@@ -46,11 +46,12 @@ dict = DataStructures.OrderedDict{AbstractString,AbstractString}(
 JLD.save("dictionary20160202ordered.jld","dictionary",dict)
 =#
 
-info("rMF (Robust Matrix Factorization) ...")
-info("Execute `rMF.loaddata()` to get the data ...")
-info("Execute `rMF.execute(5, retries=50)` to get the results for the 5 bucket case with 50 reruns ...")
-info("Execute `rMF.getresults(5, retries=50)` to see the results for the 5 bucket case.")
-info("Execute `rMF.getresultsshort(5:8, retries=50)` to see the results for bucket cases 5 to 8.")
+info("rMF (Robust Matrix Factorization)")
+info("")
+info("Use `rMF.loaddata()` to get data")
+info("Use `rMF.execute(5, retries=50)` to get the results for the 5 bucket case with 50 reruns")
+info("Use `rMF.getresults(5, retries=50)` to see the results for the 5 bucket case.")
+info("Use `rMF.getresultsshort(5:8, retries=50)` to see the results for bucket cases 5 to 8.")
 
 function getresultsshort(range=1:maxbuckets; retries=10)
 	for numbuckets = range
@@ -135,13 +136,25 @@ function getresults(numbuckets=5; retries=10)
 	end
 
 	predictions = mixers[numbuckets] * buckets[numbuckets]
-	@show concmatrix
-	@show predictions
-	errors = concmatrix - predictions
-	relerrors = errors ./ concmatrix
+	if length(ratioindex) > 0
+		info("Compute ratios:")
+		p = similar(datamatrix)
+		p[:, concindex] = predictions
+		for i = 1:size(predictions, 1)
+			for j = 1:size(ratiocomponents, 2)
+				a = ratiocomponents[1, j]
+				b = ratiocomponents[2, j]
+				p[i, ratioindex[j]] = p[i, a] / p[i, b]
+			end
+		end
+		predictions = p
+	end
+
+	errors = datamatrix - predictions
+	relerrors = errors ./ datamatrix
 
 	f = open("results/rmf-$case-data.dat", "w")
-	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder concmatrix[wellorder, :]]')
+	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder datamatrix[wellorder, :]]')
 	close(f)
 
 	info("Predictions:")
@@ -162,11 +175,11 @@ function getresults(numbuckets=5; retries=10)
 	info("Max/min Species in Buckets:")
 	maxs = maximum(buckets[numbuckets], 1)
 	mins = minimum(buckets[numbuckets], 1)
-	display([uniquespecies maxs' mins'])
+	display([uniquespecies[concindex] maxs' mins'])
 	info("Mixers:")
 	display([uniquewells mixers[numbuckets]])
 	info("Buckets:")
-	display([uniquespecies buckets[numbuckets]'])
+	display([uniquespecies[concindex] buckets[numbuckets]'])
 	info("Normalized buckets:")
 	for i=1:length(maxs)
 		if maxs[i] == mins[i]
@@ -174,15 +187,15 @@ function getresults(numbuckets=5; retries=10)
 		end
 	end
 	nbuckets = (buckets[numbuckets] .- mins) ./ (maxs - mins)
-	display([uniquespecies nbuckets'])
+	display([uniquespecies[concindex] nbuckets'])
 	source_weight = sum(nbuckets, 2)
 	source_index = sortperm(collect(source_weight), rev=true)
 	info("Sorted normalized buckets:")
 	sbuckets = nbuckets[source_index,:]
-	display([uniquespecies sbuckets'])
+	display([uniquespecies[concindex] sbuckets'])
 	info("Sorted buckets:")
 	s2buckets = buckets[numbuckets][source_index,:]
-	display([uniquespecies s2buckets'])
+	display([uniquespecies[concindex] s2buckets'])
 	# sbuckets[sbuckets.<1e-6] = 1e-6
 	gbucket = Gadfly.spy(sbuckets', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
 				Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"),
@@ -302,41 +315,56 @@ function getresults(numbuckets=5; retries=10)
 end
 
 function loaddata(filename::AbstractString, casename::AbstractString)
+	global ratioindex = Int[]
 	global case = casename
 	if filename == "test"
 		global uniquewells = ["W1", "W2"]
-		global uniquespecies = ["A", "δA"]
+		global uniquespecies = ["A", "B", "δA"]
 		global uniquespecies_long = uniquespecies
-		global concmatrix = [[1., 1.] [2., 4.]]
+		global datamatrix = [[1., 1.] [2., 2.] [2., 4.]]
 		global wellcoord = [[0., 0.] [0., 100.]]
 		info("Concentration matrix:")
-		display([["Wells"; uniquespecies]'; uniquewells concmatrix])
+		display([["Wells"; uniquespecies]'; uniquewells datamatrix])
+		return
+	end
+	if filename == "test23ratio"
+		global uniquewells = ["W1", "W2"]
+		global uniquespecies = ["A", "B", "A/B"]
+		global uniquespecies_long = uniquespecies
+		global datamatrix = [[1., NaN] [NaN, 2.] [1., 1.]]
+		global ratioindex = Int[3]
+		global ratiocomponents = Int[1, 2]
+		global concindex = setdiff(collect(1:size(datamatrix,2)), ratioindex)
+		global wellcoord = [[0., 0.] [0., 100.]]
+		info("Concentration matrix:")
+		display([["Wells"; uniquespecies]'; uniquewells datamatrix])
 		return
 	end
 	if filename == "test23"
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "B", "C"]
 		global uniquespecies_long = uniquespecies
-		global concmatrix = [[1., 1.] [2., 4.] [2., 2.]]
+		global datamatrix = [[1., 1.] [2., 4.] [2., 2.]]
 		global wellcoord = [[0., 0.] [0., 100.]]
 		info("Concentration matrix:")
-		display([["Wells"; uniquespecies]'; uniquewells concmatrix])
+		display([["Wells"; uniquespecies]'; uniquewells datamatrix])
 		return
 	end
 	rawdata = readcsv(filename)
 	global uniquewells = rawdata[2:end, 1]
 	global uniquespecies = rawdata[1, 2:end]'
 	global uniquespecies_long = uniquespecies
-	global concmatrix = rawdata[2:end, 2:end]
+	global datamatrix = rawdata[2:end, 2:end]
 	info("Species ($(length(uniquespecies)))")
 	display(uniquespecies)
 	info("Wells ($(length(uniquewells)))")
 	display(uniquewells)
 	info("Concentration matrix:")
-	concmatrix[concmatrix .== " "] = NaN
-	concmatrix[concmatrix .== ""] = NaN
-	concmatrix = Array{Float32}(concmatrix)
-	display([["Wells"; uniquespecies]'; uniquewells concmatrix])
+	datamatrix[datamatrix .== " "] = NaN
+	datamatrix[datamatrix .== ""] = NaN
+	datamatrix = Array{Float32}(datamatrix)
+	display([["Wells"; uniquespecies]'; uniquewells datamatrix])
+	global concindex = collect(1:size(datamatrix,2))
 	return
 end
 
@@ -390,13 +418,13 @@ function loaddata(probstamp::Int64=20160102, dictstamp::Int64=0)
 	global uniquespecies_long = collect(keys(dict))
 	name2j = Dict(zip(uniquespecies, 1:length(uniquespecies)))
 	datacount = zeros(Int, length(uniquewells), length(uniquespecies))
-	concmatrix = zeros(Float64, length(uniquewells), length(uniquespecies))
+	datamatrix = zeros(Float64, length(uniquewells), length(uniquespecies))
 	for index = 1:length(wells)
 		i = wells2i[wells[index]]
 		if haskey(name2j, names[index])
 			j = name2j[names[index]]
 			datacount[i, j] += 1
-			concmatrix[i, j] += concs[index]
+			datamatrix[i, j] += concs[index]
 		end
 	end
 	info("Species ($(length(uniquespecies)))")
@@ -409,9 +437,10 @@ function loaddata(probstamp::Int64=20160102, dictstamp::Int64=0)
 	display([uniquewells sum(datacount,2)])
 	info("Observations per species:")
 	display([uniquespecies sum(datacount,1)'])
-	global concmatrix = concmatrix ./ datacount # gives NaN if there is no data, otherwise divides by the number of results
+	global datamatrix = datamatrix ./ datacount # gives NaN if there is no data, otherwise divides by the number of results
 	info("Concentration matrix:")
-	display([["Wells"; uniquespecies]'; uniquewells concmatrix])
+	display([["Wells"; uniquespecies]'; uniquewells datamatrix])
+	global concindex = collect(1:size(datamatrix,2))
 	coord, coordheader = readdlm("data/coord$(probstamp).dat", header=true)
 	global wellcoord = Array(Float64, length(uniquewells), 2)
 	for index = 1:length(uniquewells)
@@ -443,9 +472,30 @@ end
 Perform rMF analyses
 """
 function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtures::Bool=true, matchdelta::Bool=false, quiet::Bool=true)
-	if sizeof(concmatrix) == 0
+	if sizeof(datamatrix) == 0
 		warn("Execute `rMF.loaddata()` first!")
 		return
+	end
+	if length(ratioindex) > 0
+		nummixtures = size(datamatrix, 1)
+		numconstituents = size(datamatrix, 2)
+		concmatrix = datamatrix[:, concindex]
+		ratiomatrix = datamatrix[:, ratioindex]
+		info("Mixtures matrix:")
+		display([["Wells"; uniquespecies[concindex]]'; uniquewells concmatrix])
+		info("Ratio matrix:")
+		display([["Wells"; uniquespecies[ratioindex]]'; uniquewells ratiomatrix])
+		ratios = fill(NaN, nummixtures, numconstituents, numconstituents)
+		for i = 1:nummixtures
+			for j = 1:size(ratiocomponents, 2)
+				a = ratiocomponents[1, j]
+				b = ratiocomponents[2, j]
+				ratios[i, a, b] = ratiomatrix[i]
+			end
+		end
+	else
+		concmatrix = datamatrix
+		ratios = nothing
 	end
 	min = minimum(concmatrix, 1)
 	max = maximum(concmatrix, 1)
@@ -453,7 +503,7 @@ function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtu
 	# calibrationtargets = concmatrix ./ max # normalize
 	for numbuckets = range
 		# NMFk using mixmatch 
-		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(calibrationtargets, retries, numbuckets; mixmatch=mixmatch, matchdelta=matchdelta, mixtures=mixtures, quiet=quiet, regularizationweight=1e-3)
+		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(calibrationtargets, retries, numbuckets; ratios=ratios, mixmatch=mixmatch, matchdelta=matchdelta, mixtures=mixtures, quiet=quiet, regularizationweight=1e-3)
 		# buckets[numbuckets] = buckets[numbuckets] .* max # undo the normalization
 		buckets[numbuckets] = buckets[numbuckets] .* (max - min) .+ min # undo the normalization
 		mixsum = sum(mixers[numbuckets], 2)
@@ -469,6 +519,7 @@ function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtu
 	return
 end
 
+info("")
 info("Use `rMF.loaddata()` to load different data sets:")
 info("rMF.loaddata(20151202) - original fingerprint data set")
 info("rMF.loaddata(20160102) - original fingerprint data set without pz wells")
