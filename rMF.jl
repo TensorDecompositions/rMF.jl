@@ -314,20 +314,26 @@ function getresults(numbuckets=5; retries=10)
 	end
 end
 
-function loaddata(filename::AbstractString, casename::AbstractString)
+function loaddata(filename::AbstractString, casename::AbstractString="")
 	global ratioindex = Int[]
-	global case = casename
-	if filename == "test"
+	global deltas = nothing
+	global deltaindex = Int[]
+	if filename == "test23delta"
+		global case = filename
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "B", "δA"]
 		global uniquespecies_long = uniquespecies
-		global datamatrix = [[1., 1.] [2., 2.] [2., 4.]]
+		global datamatrix = [[1., NaN] [NaN, 2.] [2., 4.]]
+		global deltaindex = Int[3]
+		global deltadependancy = Int[1]
+		global concindex = collect(1:size(datamatrix,2))
 		global wellcoord = [[0., 0.] [0., 100.]]
 		info("Concentration matrix:")
 		display([["Wells"; uniquespecies]'; uniquewells datamatrix])
 		return
 	end
 	if filename == "test23ratio"
+		global case = filename
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "B", "A/B"]
 		global uniquespecies_long = uniquespecies
@@ -341,10 +347,12 @@ function loaddata(filename::AbstractString, casename::AbstractString)
 		return
 	end
 	if filename == "test23"
+		global case = filename
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "B", "C"]
 		global uniquespecies_long = uniquespecies
 		global datamatrix = [[1., 1.] [2., 4.] [2., 2.]]
+		global concindex = collect(1:size(datamatrix,2))
 		global wellcoord = [[0., 0.] [0., 100.]]
 		info("Concentration matrix:")
 		display([["Wells"; uniquespecies]'; uniquewells datamatrix])
@@ -355,6 +363,7 @@ function loaddata(filename::AbstractString, casename::AbstractString)
 	global uniquespecies = rawdata[1, 2:end]'
 	global uniquespecies_long = uniquespecies
 	global datamatrix = rawdata[2:end, 2:end]
+	global concindex = collect(1:size(datamatrix,2))
 	info("Species ($(length(uniquespecies)))")
 	display(uniquespecies)
 	info("Wells ($(length(uniquewells)))")
@@ -364,14 +373,11 @@ function loaddata(filename::AbstractString, casename::AbstractString)
 	datamatrix[datamatrix .== ""] = NaN
 	datamatrix = Array{Float32}(datamatrix)
 	display([["Wells"; uniquespecies]'; uniquewells datamatrix])
-	global concindex = collect(1:size(datamatrix,2))
 	return
 end
 
-function loaddata(probstamp::Int64=20160102, dictstamp::Int64=0)
-	if dictstamp == 0
-		dictstamp = probstamp
-	end
+function loaddata(probstamp::Int64=20160102, probkey::AbstractString="")
+	dictstamp = probstamp
 	global case = probstamp
 	global dict = JLD.load("dictionary$(dictstamp)ordered.jld","dictionary")
 	# mixes = JLD.load("mixtures$(timestamp).jld","mixtures")
@@ -471,7 +477,7 @@ end
 """
 Perform rMF analyses
 """
-function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtures::Bool=true, matchdelta::Bool=false, quiet::Bool=true)
+function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtures::Bool=true, matchwaterdeltas::Bool=false, quiet::Bool=true)
 	if sizeof(datamatrix) == 0
 		warn("Execute `rMF.loaddata()` first!")
 		return
@@ -497,13 +503,27 @@ function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtu
 		concmatrix = datamatrix
 		ratios = nothing
 	end
+	if length(deltaindex) > 0
+		nummixtures = size(datamatrix, 1)
+		numconstituents = size(datamatrix, 2)
+		mixindex = setdiff(collect(1:size(datamatrix,2)), deltaindex)
+		concmatrix = datamatrix[:, mixindex]
+		deltamatrix = datamatrix[:, deltaindex]
+		info("Mixtures matrix:")
+		display([["Wells"; uniquespecies[mixindex]]'; uniquewells concmatrix])
+		info("Delta matrix:")
+		display([["Wells"; uniquespecies[deltaindex]]'; uniquewells deltamatrix])
+	else
+		concmatrix = datamatrix
+		deltamatrix = nothing
+	end
 	min = minimum(concmatrix, 1)
 	max = maximum(concmatrix, 1)
 	calibrationtargets = (concmatrix .- min) ./ (max - min) # normalize
 	# calibrationtargets = concmatrix ./ max # normalize
 	for numbuckets = range
 		# NMFk using mixmatch 
-		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(calibrationtargets, retries, numbuckets; ratios=ratios, mixmatch=mixmatch, matchdelta=matchdelta, mixtures=mixtures, quiet=quiet, regularizationweight=1e-3)
+		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(calibrationtargets, retries, numbuckets; deltas=deltamatrix, deltaindices=deltadependancy, ratios=ratios, mixmatch=mixmatch, matchwaterdeltas=matchwaterdeltas, mixtures=mixtures, quiet=quiet, regularizationweight=1e-3)
 		# buckets[numbuckets] = buckets[numbuckets] .* max # undo the normalization
 		buckets[numbuckets] = buckets[numbuckets] .* (max - min) .+ min # undo the normalization
 		mixsum = sum(mixers[numbuckets], 2)
