@@ -55,8 +55,8 @@ info("Use `rMF.getresultsshort(5:8, retries=50)` to see the results for bucket c
 
 function getresultsshort(range=1:maxbuckets; retries=10)
 	for numbuckets = range
-		if isfile("results/rmf-$case-$numbuckets-$retries.jld")
-			j = JLD.load("results/rmf-$case-$numbuckets-$retries.jld")
+		if isfile("results/$case-$numbuckets-$retries.jld")
+			j = JLD.load("results/$case-$numbuckets-$retries.jld")
 			fitquality[numbuckets] = j["fit"]
 			robustness[numbuckets] = j["robustness"]
 			println("Buckets = $numbuckets; Best objective function = $(fitquality[numbuckets]); Robustness = $(robustness[numbuckets])")
@@ -75,8 +75,8 @@ function getresults(numbuckets=5; retries=10)
 		e = true
 	end
 	if e 
-		if isfile("results/rmf-$case-$numbuckets-$retries.jld")
-			j = JLD.load("results/rmf-$case-$numbuckets-$retries.jld")
+		if isfile("results/$case-$numbuckets-$retries.jld")
+			j = JLD.load("results/$case-$numbuckets-$retries.jld")
 			buckets[numbuckets] = j["buckets"]
 			if haskey(j, "delbuckets")
 				delbuckets[numbuckets] = j["delbuckets"]
@@ -103,7 +103,7 @@ function getresults(numbuckets=5; retries=10)
 			buckets[numbuckets] = buckets[numbuckets][:,collect(values(order))]
 			w = true
 		else
-			error("Result file `results/rmf-$case-$numbuckets-$retries.jld` is missing ...\nExecute `rMF.execute($numbuckets)` to get the results!")
+			error("Result file `results/$case-$numbuckets-$retries.jld` is missing ...\nExecute `rMF.execute($numbuckets)` to get the results!")
 			return	
 		end
 	end
@@ -153,23 +153,23 @@ function getresults(numbuckets=5; retries=10)
 	errors = datamatrix - predictions
 	relerrors = errors ./ datamatrix
 
-	f = open("results/rmf-$case-data.dat", "w")
+	f = open("results/$case-data.dat", "w")
 	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder datamatrix[wellorder, :]]')
 	close(f)
 
 	info("Predictions:")
 	display([["Wells"; uniquespecies]'; wellnameorder predictions[wellorder, :]]')
-	f = open("results/rmf-$case-$numbuckets-$retries-predictions.dat", "w")
+	f = open("results/$case-$numbuckets-$retries-predictions.dat", "w")
 	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder predictions[wellorder, :]]')
 	close(f)
 	info("Match errors:")
 	display([["Wells"; uniquespecies]'; wellnameorder errors[wellorder, :]]')
-	f = open("results/rmf-$case-$numbuckets-$retries-errors.dat", "w")
+	f = open("results/$case-$numbuckets-$retries-errors.dat", "w")
 	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder errors[wellorder, :]]')
 	close(f)
 	info("Relative match errors:")
 	display([["Wells"; uniquespecies]'; wellnameorder relerrors[wellorder, :]]')
-	f = open("results/rmf-$case-$numbuckets-$retries-relerrors.dat", "w")
+	f = open("results/$case-$numbuckets-$retries-relerrors.dat", "w")
 	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder relerrors[wellorder, :]]')
 	close(f)
 	info("Max/min Species in Buckets:")
@@ -202,9 +202,9 @@ function getresults(numbuckets=5; retries=10)
 				Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
 				Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red"))))
 	# filename, format = Mads.setimagefileformat(filename, format)
-	filename = "results/rmf-$case-$numbuckets-$retries-buckets.svg"
+	filename = "results/$case-$numbuckets-$retries-buckets.svg"
 	Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
-	filename = "results/rmf-$case-$numbuckets-$retries-buckets.png"
+	filename = "results/$case-$numbuckets-$retries-buckets.png"
 	Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
 
 	info("Sorted mixers:")
@@ -215,9 +215,9 @@ function getresults(numbuckets=5; retries=10)
 				Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
 				Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red"))))
 	# filename, format = Mads.setimagefileformat(filename, format)
-	filename = "results/rmf-$case-$numbuckets-$retries-mixers.svg"
+	filename = "results/$case-$numbuckets-$retries-mixers.svg"
 	Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
-	filename = "results/rmf-$case-$numbuckets-$retries-mixers.png"
+	filename = "results/$case-$numbuckets-$retries-mixers.png"
 	Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
 
 	return
@@ -265,7 +265,7 @@ function getresults(numbuckets=5; retries=10)
 		end
 		PyPlot.yticks([538500, 539500], ["538500", "539500"], rotation="vertical")
 		PyPlot.tight_layout()
-		PyPlot.savefig("results/rmf-$case-$numbuckets-$retries-source-$s.png")
+		PyPlot.savefig("results/$case-$numbuckets-$retries-source-$s.png")
 		PyPlot.close()
 	end
 	selectedspecies =[1,3,5,7]
@@ -304,22 +304,22 @@ function getresults(numbuckets=5; retries=10)
 			end
 			PyPlot.yticks([538500, 539500], ["538500", "539500"], rotation="vertical")
 			PyPlot.tight_layout()
-			PyPlot.savefig("results/rmf-$case-$numbuckets-$retries-source-$b-$current_species.png")
+			PyPlot.savefig("results/$case-$numbuckets-$retries-source-$b-$current_species.png")
 			PyPlot.close()
 		end
 	end
 	if w
-		warn("Results are loaded from external file `results/rmf-$case-$numbuckets-$retries.jld`...")
+		warn("Results are loaded from external file `results/$case-$numbuckets-$retries.jld`...")
 		warn("Execute `rMF.execute($numbuckets)` to rerun ...")
 	end
 end
 
-function loaddata(filename::AbstractString, casename::AbstractString="")
+function loaddata(casename::AbstractString)
+	global case = casename
 	global ratioindex = Int[]
 	global deltas = nothing
 	global deltaindex = Int[]
-	if filename == "test23delta"
-		global case = filename
+	if casename == "test23delta"
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "B", "δA"]
 		global uniquespecies_long = uniquespecies
@@ -332,8 +332,7 @@ function loaddata(filename::AbstractString, casename::AbstractString="")
 		display([["Wells"; uniquespecies]'; uniquewells datamatrix])
 		return
 	end
-	if filename == "test23ratio"
-		global case = filename
+	if casename == "test23ratio"
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "B", "A/B"]
 		global uniquespecies_long = uniquespecies
@@ -346,8 +345,7 @@ function loaddata(filename::AbstractString, casename::AbstractString="")
 		display([["Wells"; uniquespecies]'; uniquewells datamatrix])
 		return
 	end
-	if filename == "test23"
-		global case = filename
+	if casename == "test23"
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "B", "C"]
 		global uniquespecies_long = uniquespecies
@@ -358,7 +356,7 @@ function loaddata(filename::AbstractString, casename::AbstractString="")
 		display([["Wells"; uniquespecies]'; uniquewells datamatrix])
 		return
 	end
-	rawdata = readcsv(filename)
+	rawdata = readcsv("data/" * casename * ".csv")
 	global uniquewells = rawdata[2:end, 1]
 	global uniquespecies = rawdata[1, 2:end]'
 	global uniquespecies_long = uniquespecies
@@ -534,7 +532,7 @@ function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtu
 			display(mixers[numbuckets])
 		end
 		println("Buckets = $numbuckets; Best objective function = $(fitquality[numbuckets]); Robustness = $(robustness[numbuckets])")
-		JLD.save("results/rmf-$case-$numbuckets-$retries.jld", "wells", uniquewells, "species", uniquespecies, "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets])
+		JLD.save("results/$case-$numbuckets-$retries.jld", "wells", uniquewells, "species", uniquespecies, "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets])
 	end
 	return
 end
