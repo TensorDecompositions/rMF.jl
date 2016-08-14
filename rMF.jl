@@ -1,5 +1,6 @@
 module rMF
 
+import MixMatch
 import NMFk
 import JLD
 import DataStructures
@@ -14,9 +15,9 @@ import PyPlot
 maxbuckets = 10
 mixers = Array(Array{Float64, 2}, maxbuckets)
 buckets = Array(Array{Float64, 2}, maxbuckets)
-delbuckets = Array(Array{Float64, 2}, maxbuckets)
 fitquality = Array(Float64, maxbuckets)
 robustness = Array(Float64, maxbuckets)
+deltadependancy = Int[]
 dict = Dict()
 
 #=
@@ -78,9 +79,6 @@ function getresults(numbuckets=5; retries=10)
 		if isfile("results/$case-$numbuckets-$retries.jld")
 			j = JLD.load("results/$case-$numbuckets-$retries.jld")
 			buckets[numbuckets] = j["buckets"]
-			if haskey(j, "delbuckets")
-				delbuckets[numbuckets] = j["delbuckets"]
-			end
 			mixers[numbuckets] = j["mixers"]
 			fitquality[numbuckets] = j["fit"]
 			robustness[numbuckets] = j["robustness"]
@@ -111,7 +109,6 @@ function getresults(numbuckets=5; retries=10)
 	info("Robustness: $(robustness[numbuckets])")
 
 	wells2i = Dict(zip(uniquewells, 1:length(uniquewells)))
-	# wellnameorder = readdlm("orderedwells-number.dat")
 	if isfile("orderedwells-WE.dat")
 		wellnameorder = readdlm("orderedwells-WE.dat")
 		wellorder = zeros(Int, length(wellnameorder))
@@ -135,7 +132,18 @@ function getresults(numbuckets=5; retries=10)
 		wellnameorder = uniquewells		
 	end
 
-	predictions = mixers[numbuckets] * buckets[numbuckets]
+	if length(deltaindex) > 0
+		numconstituents = size(datamatrix, 2)
+		numdeltas = length(deltaindex)
+		numconc = numconstituents - numdeltas
+		H_conc = buckets[numbuckets][:,1:numconc]
+		H_deltas = buckets[numbuckets][:,numconc+1:end]
+		predictions = similar(datamatrix)
+		predictions[:, concindex] = mixers[numbuckets] * H_conc
+		predictions[:, deltaindex] = MixMatch.computedeltas(mixers[numbuckets], H_conc, H_deltas, deltadependancy)
+	else
+		predictions = mixers[numbuckets] * buckets[numbuckets]
+	end
 	if length(ratioindex) > 0
 		info("Compute ratios:")
 		p = similar(datamatrix)
@@ -175,11 +183,11 @@ function getresults(numbuckets=5; retries=10)
 	info("Max/min Species in Buckets:")
 	maxs = maximum(buckets[numbuckets], 1)
 	mins = minimum(buckets[numbuckets], 1)
-	display([uniquespecies[concindex] maxs' mins'])
+	display([uniquespecies[dataindex] maxs' mins'])
 	info("Mixers:")
 	display([uniquewells mixers[numbuckets]])
 	info("Buckets:")
-	display([uniquespecies[concindex] buckets[numbuckets]'])
+	display([uniquespecies[dataindex] buckets[numbuckets]'])
 	info("Normalized buckets:")
 	for i=1:length(maxs)
 		if maxs[i] == mins[i]
@@ -187,15 +195,15 @@ function getresults(numbuckets=5; retries=10)
 		end
 	end
 	nbuckets = (buckets[numbuckets] .- mins) ./ (maxs - mins)
-	display([uniquespecies[concindex] nbuckets'])
+	display([uniquespecies[dataindex] nbuckets'])
 	source_weight = sum(nbuckets, 2)
 	source_index = sortperm(collect(source_weight), rev=true)
 	info("Sorted normalized buckets:")
 	sbuckets = nbuckets[source_index,:]
-	display([uniquespecies[concindex] sbuckets'])
+	display([uniquespecies[dataindex] sbuckets'])
 	info("Sorted buckets:")
 	s2buckets = buckets[numbuckets][source_index,:]
-	display([uniquespecies[concindex] s2buckets'])
+	display([uniquespecies[dataindex] s2buckets'])
 	# sbuckets[sbuckets.<1e-6] = 1e-6
 	gbucket = Gadfly.spy(sbuckets', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
 				Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"),
@@ -323,10 +331,11 @@ function loaddata(casename::AbstractString)
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "B", "δA"]
 		global uniquespecies_long = uniquespecies
-		global datamatrix = [[1., NaN] [NaN, 2.] [2., 4.]]
+		global datamatrix = [[1., 0.1] [0.1, 1.] [0.1, 1.]]
 		global deltaindex = Int[3]
 		global deltadependancy = Int[1]
-		global concindex = collect(1:size(datamatrix,2))
+		global dataindex = collect(1:size(datamatrix,2))
+		global concindex = setdiff(dataindex, deltaindex)
 		global wellcoord = [[0., 0.] [0., 100.]]
 		info("Concentration matrix:")
 		display([["Wells"; uniquespecies]'; uniquewells datamatrix])
@@ -340,6 +349,7 @@ function loaddata(casename::AbstractString)
 		global ratioindex = Int[3]
 		global ratiocomponents = Int[1, 2]
 		global concindex = setdiff(collect(1:size(datamatrix,2)), ratioindex)
+		global dataindex = concindex
 		global wellcoord = [[0., 0.] [0., 100.]]
 		info("Concentration matrix:")
 		display([["Wells"; uniquespecies]'; uniquewells datamatrix])
@@ -351,6 +361,7 @@ function loaddata(casename::AbstractString)
 		global uniquespecies_long = uniquespecies
 		global datamatrix = [[1., 1.] [2., 4.] [2., 2.]]
 		global concindex = collect(1:size(datamatrix,2))
+		global dataindex = concindex
 		global wellcoord = [[0., 0.] [0., 100.]]
 		info("Concentration matrix:")
 		display([["Wells"; uniquespecies]'; uniquewells datamatrix])
@@ -362,6 +373,7 @@ function loaddata(casename::AbstractString)
 	global uniquespecies_long = uniquespecies
 	global datamatrix = rawdata[2:end, 2:end]
 	global concindex = collect(1:size(datamatrix,2))
+	global dataindex = concindex
 	info("Species ($(length(uniquespecies)))")
 	display(uniquespecies)
 	info("Wells ($(length(uniquewells)))")
@@ -475,7 +487,7 @@ end
 """
 Perform rMF analyses
 """
-function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtures::Bool=true, matchwaterdeltas::Bool=false, quiet::Bool=true)
+function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, normalize::Bool=false, mixtures::Bool=true, regularizationweight::Number=0, matchwaterdeltas::Bool=false, quiet::Bool=true)
 	if sizeof(datamatrix) == 0
 		warn("Execute `rMF.loaddata()` first!")
 		return
@@ -504,26 +516,19 @@ function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtu
 	if length(deltaindex) > 0
 		nummixtures = size(datamatrix, 1)
 		numconstituents = size(datamatrix, 2)
-		mixindex = setdiff(collect(1:size(datamatrix,2)), deltaindex)
-		concmatrix = datamatrix[:, mixindex]
+		concmatrix = datamatrix[:, concindex]
 		deltamatrix = datamatrix[:, deltaindex]
 		info("Mixtures matrix:")
-		display([["Wells"; uniquespecies[mixindex]]'; uniquewells concmatrix])
+		display([["Wells"; uniquespecies[concindex]]'; uniquewells concmatrix])
 		info("Delta matrix:")
 		display([["Wells"; uniquespecies[deltaindex]]'; uniquewells deltamatrix])
 	else
 		concmatrix = datamatrix
 		deltamatrix = nothing
 	end
-	min = minimum(concmatrix, 1)
-	max = maximum(concmatrix, 1)
-	calibrationtargets = (concmatrix .- min) ./ (max - min) # normalize
-	# calibrationtargets = concmatrix ./ max # normalize
 	for numbuckets = range
 		# NMFk using mixmatch 
-		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(calibrationtargets, retries, numbuckets; deltas=deltamatrix, deltaindices=deltadependancy, ratios=ratios, mixmatch=mixmatch, matchwaterdeltas=matchwaterdeltas, mixtures=mixtures, quiet=quiet, regularizationweight=1e-3)
-		# buckets[numbuckets] = buckets[numbuckets] .* max # undo the normalization
-		buckets[numbuckets] = buckets[numbuckets] .* (max - min) .+ min # undo the normalization
+		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(concmatrix, retries, numbuckets; deltas=deltamatrix, deltaindices=deltadependancy, ratios=ratios, mixmatch=mixmatch, normalize=normalize, matchwaterdeltas=matchwaterdeltas, mixtures=mixtures, quiet=quiet, regularizationweight=regularizationweight)
 		mixsum = sum(mixers[numbuckets], 2)
 		index = find(mixsum .> 1.1) | find(mixsum .< 0.9)
 		if length(index) > 0
@@ -543,7 +548,7 @@ info("rMF.loaddata(20151202) - original fingerprint data set")
 info("rMF.loaddata(20160102) - original fingerprint data set without pz wells")
 info("rMF.loaddata(20160202) - new fingerprint data set with pz wells")
 info("rMF.loaddata(20160302) - new fingerprint data set without pz wells")
-info("""rMF.loaddata("data/Fingerprint\ data\ TA16\ 20160721.csv", "ta16-20160721")""")
+info("""rMF.loaddata("rdx-20160721")""")
 info("")
 info("Use `rMF.execute()` to perform rMF analyses:")
 info("rMF.execute(2:4, retries=100)")
