@@ -9,6 +9,7 @@ import PyCall
 import Gadfly
 import Colors
 import PyPlot
+import Base.Test
 
 @PyCall.pyimport matplotlib.patheffects as PathEffects
 
@@ -19,6 +20,7 @@ fitquality = Array(Float64, maxbuckets)
 robustness = Array(Float64, maxbuckets)
 deltadependancy = Int[]
 dict = Dict()
+casekeyword = ""
 
 #=
 dict = DataStructures.OrderedDict{AbstractString,AbstractString}(
@@ -158,8 +160,14 @@ function getresults(numbuckets=5; retries=10)
 		predictions = p
 	end
 
-	errors = datamatrix - predictions
-	relerrors = errors ./ datamatrix
+	indexnan = isnan(datamatrix)
+	d = copy(datamatrix)
+	d[indexnan] = 0
+	errors = d - predictions
+	relerrors = errors ./ d
+	of = sum(errors.^2)
+	info("Fit quality (check): $(of)")
+	@Base.Test.test_approx_eq_eps of fitquality[numbuckets] 1e-1
 
 	f = open("results/$case-data.dat", "w")
 	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder datamatrix[wellorder, :]]')
@@ -322,11 +330,12 @@ function getresults(numbuckets=5; retries=10)
 	end
 end
 
-function loaddata(casename::AbstractString)
+function loaddata(casename::AbstractString, keyword::AbstractString="")
 	global case = casename
 	global ratioindex = Int[]
 	global deltas = nothing
 	global deltaindex = Int[]
+	global casekeyword = keyword
 	if casename == "test23delta"
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "B", "δA"]
@@ -487,7 +496,7 @@ end
 """
 Perform rMF analyses
 """
-function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, normalize::Bool=false, mixtures::Bool=true, regularizationweight::Number=0, matchwaterdeltas::Bool=false, quiet::Bool=true)
+function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, normalize::Bool=true, mixtures::Bool=true, regularizationweight::Number=0, matchwaterdeltas::Bool=false, quiet::Bool=true)
 	if sizeof(datamatrix) == 0
 		warn("Execute `rMF.loaddata()` first!")
 		return
@@ -537,7 +546,12 @@ function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, norma
 			display(mixers[numbuckets])
 		end
 		println("Buckets = $numbuckets; Best objective function = $(fitquality[numbuckets]); Robustness = $(robustness[numbuckets])")
-		JLD.save("results/$case-$numbuckets-$retries.jld", "wells", uniquewells, "species", uniquespecies, "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets])
+		if casekeyword == ""
+			filename = "results/$case-$numbuckets-$retries.jld"
+		else
+			filename = "results/$case-$casekeyword-$numbuckets-$retries.jld"
+		end
+		JLD.save(filename, "wells", uniquewells, "species", uniquespecies, "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets])
 	end
 	return
 end
