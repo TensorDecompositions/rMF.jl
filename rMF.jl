@@ -14,6 +14,7 @@ import Base.Test
 @PyCall.pyimport matplotlib.patheffects as PathEffects
 
 maxbuckets = 10
+case = ""
 casekeyword = ""
 mixers = Array(Array{Float64, 2}, maxbuckets)
 buckets = Array(Array{Float64, 2}, maxbuckets)
@@ -56,69 +57,77 @@ info("Use `rMF.execute(5, retries=50)` to get the results for the 5 bucket case 
 info("Use `rMF.getresults(5, retries=50)` to see the results for the 5 bucket case.")
 info("Use `rMF.getresultsshort(5:8, retries=50)` to see the results for bucket cases 5 to 8.")
 
-function getresultsshort(range=1:maxbuckets; retries=10)
-	for numbuckets = range
-		if casekeyword == ""
-			filename = "results/$case-$numbuckets-$retries.jld"
+function getresultsshort(range=1:maxbuckets, keyword::AbstractString=""; retries=10)
+	if keyword != ""
+		if case != "" && !contains(keyword, case)
+			casestring = case * "-" * keyword
 		else
-			filename = "results/$case-$casekeyword-$numbuckets-$retries.jld"
+			casestring = keyword
 		end
+	else
+		if case != ""
+			casestring = case * "-" * casekeyword
+		else
+			warn("Problem is not defined; use rMF.loaddata() first")
+			return
+		end
+	end
+	for numbuckets = range
+		filename = "results/$(casestring)-$numbuckets-$retries.jld"
 		if isfile(filename)
 			j = JLD.load(filename)
 			fitquality[numbuckets] = j["fit"]
 			robustness[numbuckets] = j["robustness"]
 			println("Buckets = $numbuckets; Best objective function = $(fitquality[numbuckets]); Robustness = $(robustness[numbuckets])")
+		else
+			warn("File name $filename is missing!")
 		end
 	end
 end
 
-function getresults(numbuckets=5; retries=10)
-	filename = ""
-	casestring = ""
-	if casekeyword == ""
-		filename = "results/$case-$numbuckets-$retries.jld"
-	else
-		casestring = "-" * casekeyword
-		filename = "results/$(case)$(casestring)-$numbuckets-$retries.jld"
-	end
-	w = false
-	e = false
-	try
-		if !isdefined(buckets[numbuckets])
-			e = true
-		end
-	catch
-		e = true
-	end
-	if e 
-		if isfile(filename)
-			j = JLD.load(filename)
-			buckets[numbuckets] = j["buckets"]
-			mixers[numbuckets] = j["mixers"]
-			fitquality[numbuckets] = j["fit"]
-			robustness[numbuckets] = j["robustness"]
-			order = DataStructures.OrderedDict(zip(uniquespecies_long, 1:length(uniquespecies)))
-			if haskey(j, "uniquewells") && haskey(j, "uniquespecies")
-				wells = j["uniquewells"]
-				species = j["uniquespecies"]
-				remap = DataStructures.OrderedDict(zip(species, 1:length(uniquespecies)))
-			else
-				if isfile("dictionary$(case).jld")
-					dictold=JLD.load("dictionary$(case).jld","dictionary")
-					remap = DataStructures.OrderedDict(zip(collect(keys(dictold)), 1:length(uniquespecies)))
-				else
-					remap = DataStructures.OrderedDict(zip(uniquespecies_long, 1:length(uniquespecies)))
-				end
-			end
-			for i in keys(order)
-				order[i] = remap[i]
-			end
-			buckets[numbuckets] = buckets[numbuckets][:,collect(values(order))]
-			w = true
+function getresults(numbuckets=5, keyword::AbstractString=""; retries=10)
+	if keyword != ""
+		if case != "" && !contains(keyword, case)
+			casestring = case * "-" * keyword
 		else
-			error("Result file `$(filename)` is missing ...\nExecute `rMF.execute($numbuckets)` to get the results!")
-			return	
+			casestring = keyword
 		end
+	else
+		if case != ""
+			casestring = case * "-" * casekeyword
+		else
+			warn("Problem is not defined; use rMF.loaddata() first")
+			return
+		end
+	end
+	filename = "results/$(casestring)-$numbuckets-$retries.jld"
+	if isfile(filename)
+		j = JLD.load(filename)
+		buckets[numbuckets] = j["buckets"]
+		mixers[numbuckets] = j["mixers"]
+		fitquality[numbuckets] = j["fit"]
+		robustness[numbuckets] = j["robustness"]
+		order = DataStructures.OrderedDict(zip(uniquespecies_long, 1:length(uniquespecies)))
+		if haskey(j, "uniquewells") && haskey(j, "uniquespecies")
+			wells = j["uniquewells"]
+			species = j["uniquespecies"]
+			remap = DataStructures.OrderedDict(zip(species, 1:length(uniquespecies)))
+		else
+			if isfile("dictionary$(case).jld")
+				dictold=JLD.load("dictionary$(case).jld","dictionary")
+				remap = DataStructures.OrderedDict(zip(collect(keys(dictold)), 1:length(uniquespecies)))
+			else
+				remap = DataStructures.OrderedDict(zip(uniquespecies_long, 1:length(uniquespecies)))
+			end
+		end
+		for i in keys(order)
+			order[i] = remap[i]
+		end
+		buckets[numbuckets] = buckets[numbuckets][:,collect(values(order))]
+		w = true
+	else
+		error("Result file `$(filename)` is missing ...\nExecute `rMF.execute($numbuckets)` to get the results!")
+		return
 	end
 	info("Fit quality: $(fitquality[numbuckets])")
 	info("Robustness: $(robustness[numbuckets])")
@@ -185,23 +194,23 @@ function getresults(numbuckets=5; retries=10)
 	info("Fit quality (check): $(of)")
 	@Base.Test.test_approx_eq_eps of fitquality[numbuckets] 1e-1
 
-	f = open("results/$(case)$(casestring)-data.dat", "w")
+	f = open("results/$(casestring)-data.dat", "w")
 	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder datamatrix[wellorder, :]]')
 	close(f)
 
 	info("Predictions:")
 	display([["Wells"; uniquespecies]'; wellnameorder predictions[wellorder, :]]')
-	f = open("results/$(case)$(casestring)-$numbuckets-$retries-predictions.dat", "w")
+	f = open("results/$(casestring)-$numbuckets-$retries-predictions.dat", "w")
 	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder predictions[wellorder, :]]')
 	close(f)
 	info("Match errors:")
 	display([["Wells"; uniquespecies]'; wellnameorder errors[wellorder, :]]')
-	f = open("results/$(case)$(casestring)-$numbuckets-$retries-errors.dat", "w")
+	f = open("results/$(casestring)-$numbuckets-$retries-errors.dat", "w")
 	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder errors[wellorder, :]]')
 	close(f)
 	info("Relative match errors:")
 	display([["Wells"; uniquespecies]'; wellnameorder relerrors[wellorder, :]]')
-	f = open("results/$(case)$(casestring)-$numbuckets-$retries-relerrors.dat", "w")
+	f = open("results/$(casestring)-$numbuckets-$retries-relerrors.dat", "w")
 	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder relerrors[wellorder, :]]')
 	close(f)
 	info("Max/min Species in Buckets:")
@@ -234,9 +243,9 @@ function getresults(numbuckets=5; retries=10)
 				Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
 				Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
 	# filename, format = Mads.setimagefileformat(filename, format)
-	filename = "results/$(case)$(casestring)-$numbuckets-$retries-buckets.svg"
+	filename = "results/$(casestring)-$numbuckets-$retries-buckets.svg"
 	Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
-	filename = "results/$(case)$(casestring)-$numbuckets-$retries-buckets.png"
+	filename = "results/$(casestring)-$numbuckets-$retries-buckets.png"
 	Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
 
 	info("Sorted mixers:")
@@ -249,9 +258,9 @@ function getresults(numbuckets=5; retries=10)
 				Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
 				Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
 	# filename, format = Mads.setimagefileformat(filename, format)
-	filename = "results/$(case)$(casestring)-$numbuckets-$retries-mixers.svg"
+	filename = "results/$(casestring)-$numbuckets-$retries-mixers.svg"
 	Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
-	filename = "results/$(case)$(casestring)-$numbuckets-$retries-mixers.png"
+	filename = "results/$(casestring)-$numbuckets-$retries-mixers.png"
 	Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
 
 	return
@@ -299,7 +308,7 @@ function getresults(numbuckets=5; retries=10)
 		end
 		PyPlot.yticks([538500, 539500], ["538500", "539500"], rotation="vertical")
 		PyPlot.tight_layout()
-		PyPlot.savefig("results/$(case)$(casestring)-$numbuckets-$retries-source-$s.png")
+		PyPlot.savefig("results/$(casestring)-$numbuckets-$retries-source-$s.png")
 		PyPlot.close()
 	end
 	selectedspecies =[1,3,5,7]
@@ -338,7 +347,7 @@ function getresults(numbuckets=5; retries=10)
 			end
 			PyPlot.yticks([538500, 539500], ["538500", "539500"], rotation="vertical")
 			PyPlot.tight_layout()
-			PyPlot.savefig("results/$(case)$(casestring)-$numbuckets-$retries-source-$b-$current_species.png")
+			PyPlot.savefig("results/$(casestring)-$numbuckets-$retries-source-$b-$current_species.png")
 			PyPlot.close()
 		end
 	end
