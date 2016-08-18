@@ -65,8 +65,12 @@ function getresultsshort(range=1:maxbuckets, keyword::AbstractString=""; retries
 			casestring = keyword
 		end
 	else
-		if case != ""
-			casestring = case * "-" * casekeyword
+		if case != "" 
+			if casekeyword != ""
+				casestring = case * "-" * casekeyword
+			else
+				casestring = case
+			end
 		else
 			warn("Problem is not defined; use rMF.loaddata() first")
 			return
@@ -93,8 +97,12 @@ function getresults(numbuckets=5, keyword::AbstractString=""; retries=10)
 			casestring = keyword
 		end
 	else
-		if case != ""
-			casestring = case * "-" * casekeyword
+		if case != "" 
+			if casekeyword != ""
+				casestring = case * "-" * casekeyword
+			else
+				casestring = case
+			end
 		else
 			warn("Problem is not defined; use rMF.loaddata() first")
 			return
