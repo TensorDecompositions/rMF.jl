@@ -540,7 +540,7 @@ end
 """
 Perform rMF analyses
 """
-function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, normalize::Bool=true, mixtures::Bool=true, regularizationweight::Number=0, matchwaterdeltas::Bool=false, quiet::Bool=true)
+function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, scale::Bool=true, mixtures::Bool=true, regularizationweight::Number=0, matchwaterdeltas::Bool=false, quiet::Bool=true)
 	if sizeof(datamatrix) == 0
 		warn("Execute `rMF.loaddata()` first!")
 		return
@@ -581,7 +581,7 @@ function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, norma
 	end
 	for numbuckets = range
 		# NMFk using mixmatch 
-		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(concmatrix, retries, numbuckets; deltas=deltamatrix, deltaindices=deltadependancy, ratios=ratios, mixmatch=mixmatch, normalize=normalize, matchwaterdeltas=matchwaterdeltas, mixtures=mixtures, quiet=quiet, regularizationweight=regularizationweight)
+		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(concmatrix, retries, numbuckets; deltas=deltamatrix, deltaindices=deltadependancy, ratios=ratios, mixmatch=mixmatch, scale=scale, matchwaterdeltas=matchwaterdeltas, mixtures=mixtures, quiet=quiet, regularizationweight=regularizationweight)
 		mixsum = sum(mixers[numbuckets], 2)
 		index = find(mixsum .> 1.1) | find(mixsum .< 0.9)
 		if length(index) > 0
