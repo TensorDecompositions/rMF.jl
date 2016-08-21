@@ -9,7 +9,6 @@ import PyCall
 import Gadfly
 import Colors
 import PyPlot
-import Base.Test
 
 @PyCall.pyimport matplotlib.patheffects as PathEffects
 
@@ -53,11 +52,11 @@ JLD.save("dictionary20160202ordered.jld","dictionary",dict)
 info("rMF (Robust Matrix Factorization)")
 info("")
 info("Use `rMF.loaddata()` to get data")
-info("Use `rMF.execute(5, retries=50)` to get the results for the 5 bucket case with 50 reruns")
-info("Use `rMF.getresults(5, retries=50)` to see the results for the 5 bucket case.")
-info("Use `rMF.getresultsshort(5:8, retries=50)` to see the results for bucket cases 5 to 8.")
+info("Use `rMF.execute(5, retries=50)` to compute the results for the 5 bucket case with 50 reruns")
+info("Use `rMF.getresults(5, retries=50)` to get the results for the 5 bucket case.")
+info("Use `rMF.getresults(5:6, retries=50; brief=true)` to see the results for bucket cases 5 to 8.")
 
-function getresultsshort(range=1:maxbuckets, keyword::AbstractString=""; retries=10)
+function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::AbstractString=""; retries=10, brief::Bool=false)
 	if keyword != ""
 		if case != "" && !contains(keyword, case)
 			casestring = case * "-" * keyword
@@ -80,257 +79,203 @@ function getresultsshort(range=1:maxbuckets, keyword::AbstractString=""; retries
 		filename = "results/$(casestring)-$numbuckets-$retries.jld"
 		if isfile(filename)
 			j = JLD.load(filename)
+			buckets[numbuckets] = j["buckets"]
+			mixers[numbuckets] = j["mixers"]
 			fitquality[numbuckets] = j["fit"]
 			robustness[numbuckets] = j["robustness"]
-			println("Buckets = $numbuckets; Best objective function = $(fitquality[numbuckets]); Robustness = $(robustness[numbuckets])")
-		else
-			warn("File name $filename is missing!")
-		end
-	end
-end
-
-function getresults(numbuckets=5, keyword::AbstractString=""; retries=10)
-	if keyword != ""
-		if case != "" && !contains(keyword, case)
-			casestring = case * "-" * keyword
-		else
-			casestring = keyword
-		end
-	else
-		if case != "" 
-			if casekeyword != ""
-				casestring = case * "-" * casekeyword
+			order = DataStructures.OrderedDict(zip(uniquespecies_long, 1:length(uniquespecies_long)))
+			if haskey(j, "uniquewells") && haskey(j, "uniquespecies")
+				wells = j["uniquewells"]
+				species = j["uniquespecies"]
+				remap = DataStructures.OrderedDict(zip(species, 1:length(species)))
 			else
-				casestring = case
+				if isfile("data/cr-species-order-$(case).jld")
+					dictold=JLD.load("data/cr-species-order-$(case).jld","dictionary")
+					remap = DataStructures.OrderedDict(zip(collect(keys(dictold)), 1:length(uniquespecies)))
+				else
+					remap = DataStructures.OrderedDict(zip(uniquespecies_long, 1:length(uniquespecies_long)))
+				end
 			end
-		else
-			warn("Problem is not defined; use rMF.loaddata() first")
-			return
-		end
-	end
-	filename = "results/$(casestring)-$numbuckets-$retries.jld"
-	if isfile(filename)
-		j = JLD.load(filename)
-		buckets[numbuckets] = j["buckets"]
-		mixers[numbuckets] = j["mixers"]
-		fitquality[numbuckets] = j["fit"]
-		robustness[numbuckets] = j["robustness"]
-		order = DataStructures.OrderedDict(zip(uniquespecies_long, 1:length(uniquespecies)))
-		if haskey(j, "uniquewells") && haskey(j, "uniquespecies")
-			wells = j["uniquewells"]
-			species = j["uniquespecies"]
-			remap = DataStructures.OrderedDict(zip(species, 1:length(uniquespecies)))
-		else
-			if isfile("dictionary$(case).jld")
-				dictold=JLD.load("dictionary$(case).jld","dictionary")
-				remap = DataStructures.OrderedDict(zip(collect(keys(dictold)), 1:length(uniquespecies)))
-			else
-				remap = DataStructures.OrderedDict(zip(uniquespecies_long, 1:length(uniquespecies)))
+			for i in keys(order)
+				order[i] = remap[i]
 			end
+			if length(ratioindex) > 0
+				index_list = setdiff(collect(values(order)), ratioindex)
+			else				
+				index_list = collect(values(order))
+			end
+			buckets[numbuckets] = buckets[numbuckets][:, index_list]
+		else
+			error("Result file `$(filename)` is missing ...\nExecute `rMF.execute($numbuckets)` to get the results!")
+			continue
 		end
-		for i in keys(order)
-			order[i] = remap[i]
-		end
-		buckets[numbuckets] = buckets[numbuckets][:,collect(values(order))]
-		w = true
-	else
-		error("Result file `$(filename)` is missing ...\nExecute `rMF.execute($numbuckets)` to get the results!")
-		return
-	end
-	info("Fit quality: $(fitquality[numbuckets])")
-	info("Robustness: $(robustness[numbuckets])")
 
-	wells2i = Dict(zip(uniquewells, 1:length(uniquewells)))
-	if isfile("orderedwells-WE.dat")
-		wellnameorder = readdlm("orderedwells-WE.dat")
-		wellorder = zeros(Int, length(wellnameorder))
-		for i in 1:length(wellorder)
-			if haskey(wells2i, wellnameorder[i])
-				wellorder[i] = wells2i[wellnameorder[i]]
+		wells2i = Dict(zip(uniquewells, 1:length(uniquewells)))
+		if isfile("data/cr-well-order-WE.dat")
+			wellnameorder = readdlm("data/cr-well-order-WE.dat")
+			wellorder = zeros(Int, length(wellnameorder))
+			for i in 1:length(wellorder)
+				if haskey(wells2i, wellnameorder[i])
+					wellorder[i] = wells2i[wellnameorder[i]]
+				end
 			end
-		end
-		wellmissing = wellorder .== 0
-		indexmissing = find(wellmissing)
-		wellavailable = wellorder .!= 0
-		indexavailale = find(wellavailable)
-		if length(indexmissing) > 0 && length(indexavailale) != 0
-			warn("Well(s) $(wellnameorder[indexmissing]) is not accounted!")
+			wellmissing = wellorder .== 0
+			indexmissing = find(wellmissing)
+			wellavailable = wellorder .!= 0
+			indexavailale = find(wellavailable)
+			if length(indexmissing) > 0 && length(indexavailale) != 0
+				warn("Well(s) $(wellnameorder[indexmissing]) is not accounted!")
+			else
+				wellorder = 1:length(uniquewells)
+				wellnameorder = uniquewells
+			end
 		else
 			wellorder = 1:length(uniquewells)
-			wellnameorder = uniquewells
+			wellnameorder = uniquewells		
 		end
-	else
-		wellorder = 1:length(uniquewells)
-		wellnameorder = uniquewells		
-	end
 
-	if length(deltaindex) > 0
-		numconstituents = size(datamatrix, 2)
-		numdeltas = length(deltaindex)
-		numconc = numconstituents - numdeltas
-		H_conc = buckets[numbuckets][:,1:numconc]
-		H_deltas = buckets[numbuckets][:,numconc+1:end]
-		predictions = similar(datamatrix)
-		predictions[:, concindex] = mixers[numbuckets] * H_conc
-		predictions[:, deltaindex] = MixMatch.computedeltas(mixers[numbuckets], H_conc, H_deltas, deltadependancy)
-	else
-		predictions = mixers[numbuckets] * buckets[numbuckets]
-	end
-	if length(ratioindex) > 0
-		info("Compute ratios:")
-		p = similar(datamatrix)
-		p[:, concindex] = predictions
-		for i = 1:size(predictions, 1)
-			for j = 1:size(ratiocomponents, 2)
-				a = ratiocomponents[1, j]
-				b = ratiocomponents[2, j]
-				p[i, ratioindex[j]] = p[i, a] / p[i, b]
+		if length(deltaindex) > 0
+			numconstituents = size(datamatrix, 2)
+			numdeltas = length(deltaindex)
+			numconc = numconstituents - numdeltas
+			H_conc = buckets[numbuckets][:,1:numconc]
+			H_deltas = buckets[numbuckets][:,numconc+1:end]
+			predictions = similar(datamatrix)
+			predictions[:, concindex] = mixers[numbuckets] * H_conc
+			predictions[:, deltaindex] = MixMatch.computedeltas(mixers[numbuckets], H_conc, H_deltas, deltadependancy)
+		else
+			predictions = mixers[numbuckets] * buckets[numbuckets]
+		end
+		if length(ratioindex) > 0
+			info("Compute ratios:")
+			p = similar(datamatrix)
+			p[:, concindex] = predictions
+			for i = 1:size(predictions, 1)
+				for j = 1:size(ratiocomponents, 2)
+					a = ratiocomponents[1, j]
+					b = ratiocomponents[2, j]
+					p[i, ratioindex[j]] = p[i, a] / p[i, b]
+				end
+			end
+			predictions = p
+		end
+
+		indexnan = isnan(datamatrix)
+		d = copy(datamatrix)
+		d[indexnan] = 0
+		errors = d - predictions
+		errors[indexnan] = 0.
+		of = sum(errors.^2)
+		errors[indexnan] = NaN
+		relerrors = errors ./ d
+		relerrors[indexnan] = NaN
+		if brief
+			println("Buckets = $numbuckets; Best objective function = $(fitquality[numbuckets]) (check = $(of)); Robustness = $(robustness[numbuckets])")
+			continue
+		else
+			info("Fit quality: $(fitquality[numbuckets]) (check = $(of))")
+			if of - fitquality[numbuckets] > 1e-1
+				warn("Objective function test fails!")
+			end
+			info("Robustness: $(robustness[numbuckets])")
+		end
+
+		f = open("results/$(casestring)-data.dat", "w")
+		writedlm(f, [["Wells"; uniquespecies]'; wellnameorder datamatrix[wellorder, :]]')
+		close(f)
+
+		info("Predictions:")
+		display([["Wells"; uniquespecies]'; wellnameorder predictions[wellorder, :]]')
+		f = open("results/$(casestring)-$numbuckets-$retries-predictions.dat", "w")
+		writedlm(f, [["Wells"; uniquespecies]'; wellnameorder predictions[wellorder, :]]')
+		close(f)
+		info("Match errors:")
+		display([["Wells"; uniquespecies]'; wellnameorder errors[wellorder, :]]')
+		f = open("results/$(casestring)-$numbuckets-$retries-errors.dat", "w")
+		writedlm(f, [["Wells"; uniquespecies]'; wellnameorder errors[wellorder, :]]')
+		close(f)
+		info("Relative match errors:")
+		display([["Wells"; uniquespecies]'; wellnameorder relerrors[wellorder, :]]')
+		f = open("results/$(casestring)-$numbuckets-$retries-relerrors.dat", "w")
+		writedlm(f, [["Wells"; uniquespecies]'; wellnameorder relerrors[wellorder, :]]')
+		close(f)
+		info("Max/min Species in Buckets:")
+		maxs = maximum(buckets[numbuckets], 1)
+		mins = minimum(buckets[numbuckets], 1)
+		display([uniquespecies[dataindex] maxs' mins'])
+		info("Mixers:")
+		display([uniquewells mixers[numbuckets]])
+		info("Buckets:")
+		display([uniquespecies[dataindex] buckets[numbuckets]'])
+		info("Normalized buckets:")
+		for i=1:length(maxs)
+			if maxs[i] == mins[i]
+				mins[i] = 0
 			end
 		end
-		predictions = p
-	end
+		nbuckets = (buckets[numbuckets] .- mins) ./ (maxs - mins)
+		display([uniquespecies[dataindex] nbuckets'])
+		source_weight = sum(nbuckets, 2)
+		source_index = sortperm(collect(source_weight), rev=true)
+		info("Sorted normalized buckets:")
+		sbuckets = nbuckets[source_index,:]
+		display([uniquespecies[dataindex] sbuckets'])
+		info("Sorted buckets:")
+		s2buckets = buckets[numbuckets][source_index,:]
+		display([uniquespecies[dataindex] s2buckets'])
+		# sbuckets[sbuckets.<1e-6] = 1e-6
+		gbucket = Gadfly.spy(sbuckets', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
+					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"),
+					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
+					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
+		# filename, format = Mads.setimagefileformat(filename, format)
+		filename = "results/$(casestring)-$numbuckets-$retries-buckets.svg"
+		Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
+		filename = "results/$(casestring)-$numbuckets-$retries-buckets.png"
+		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
 
-	indexnan = isnan(datamatrix)
-	d = copy(datamatrix)
-	d[indexnan] = 0
-	errors = d - predictions
-	relerrors = errors ./ d
-	of = sum(errors.^2)
-	relerrors[indexnan] = NaN
-	predictions[indexnan] = NaN
-	errors[indexnan] = NaN
-	info("Fit quality (check): $(of)")
-	@Base.Test.test_approx_eq_eps of fitquality[numbuckets] 1e-1
+		info("Sorted mixers:")
+		smixers = mixers[numbuckets][wellorder, source_index]
+		smixers[smixers .< 0] = 0
+		smixers[smixers .> 1] = 1
+		display([wellnameorder smixers])
+		gmixers = Gadfly.spy(smixers, Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
+					Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"),
+					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
+					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
+		# filename, format = Mads.setimagefileformat(filename, format)
+		filename = "results/$(casestring)-$numbuckets-$retries-mixers.svg"
+		Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
+		filename = "results/$(casestring)-$numbuckets-$retries-mixers.png"
+		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
 
-	f = open("results/$(casestring)-data.dat", "w")
-	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder datamatrix[wellorder, :]]')
-	close(f)
-
-	info("Predictions:")
-	display([["Wells"; uniquespecies]'; wellnameorder predictions[wellorder, :]]')
-	f = open("results/$(casestring)-$numbuckets-$retries-predictions.dat", "w")
-	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder predictions[wellorder, :]]')
-	close(f)
-	info("Match errors:")
-	display([["Wells"; uniquespecies]'; wellnameorder errors[wellorder, :]]')
-	f = open("results/$(casestring)-$numbuckets-$retries-errors.dat", "w")
-	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder errors[wellorder, :]]')
-	close(f)
-	info("Relative match errors:")
-	display([["Wells"; uniquespecies]'; wellnameorder relerrors[wellorder, :]]')
-	f = open("results/$(casestring)-$numbuckets-$retries-relerrors.dat", "w")
-	writedlm(f, [["Wells"; uniquespecies]'; wellnameorder relerrors[wellorder, :]]')
-	close(f)
-	info("Max/min Species in Buckets:")
-	maxs = maximum(buckets[numbuckets], 1)
-	mins = minimum(buckets[numbuckets], 1)
-	display([uniquespecies[dataindex] maxs' mins'])
-	info("Mixers:")
-	display([uniquewells mixers[numbuckets]])
-	info("Buckets:")
-	display([uniquespecies[dataindex] buckets[numbuckets]'])
-	info("Normalized buckets:")
-	for i=1:length(maxs)
-		if maxs[i] == mins[i]
-			mins[i] = 0
+		if !isdefined(:wellcoord)
+			continue
 		end
-	end
-	nbuckets = (buckets[numbuckets] .- mins) ./ (maxs - mins)
-	display([uniquespecies[dataindex] nbuckets'])
-	source_weight = sum(nbuckets, 2)
-	source_index = sortperm(collect(source_weight), rev=true)
-	info("Sorted normalized buckets:")
-	sbuckets = nbuckets[source_index,:]
-	display([uniquespecies[dataindex] sbuckets'])
-	info("Sorted buckets:")
-	s2buckets = buckets[numbuckets][source_index,:]
-	display([uniquespecies[dataindex] s2buckets'])
-	# sbuckets[sbuckets.<1e-6] = 1e-6
-	gbucket = Gadfly.spy(sbuckets', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
-				Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"),
-				Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
-				Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
-	# filename, format = Mads.setimagefileformat(filename, format)
-	filename = "results/$(casestring)-$numbuckets-$retries-buckets.svg"
-	Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
-	filename = "results/$(casestring)-$numbuckets-$retries-buckets.png"
-	Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
 
-	info("Sorted mixers:")
-	smixers = mixers[numbuckets][wellorder, source_index]
-	smixers[smixers .< 0] = 0
-	smixers[smixers .> 1] = 1
-	display([wellnameorder smixers])
-	gmixers = Gadfly.spy(smixers, Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
-				Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"),
-				Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
-				Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
-	# filename, format = Mads.setimagefileformat(filename, format)
-	filename = "results/$(casestring)-$numbuckets-$retries-mixers.svg"
-	Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
-	filename = "results/$(casestring)-$numbuckets-$retries-mixers.png"
-	Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
-
-	return
-# remove deep screens
-	goodindices = 1:length(uniquewells)
-	goodindices = filter(i->!contains(uniquewells[i], "_2"), goodindices)
-	wn = uniquewells[goodindices,:]
-	wn = map(i->replace(wn[i], "_1", ""), 1:length(wn))
-	wc = wellcoord[goodindices, :]
-	if length(wc) == 0
-		warn("No well coordinates")
-		return
-	end
-	grid_size = 100
-	mm_grid_size = grid_size * 5
-	minx = floor(minimum(wc, 1)[1] / mm_grid_size - .5) * mm_grid_size
-	maxx = ceil(maximum(wc, 1)[1] / mm_grid_size + .5) * mm_grid_size
-	miny = floor(minimum(wc, 1)[2] / mm_grid_size - .5) * mm_grid_size
-	maxy = ceil(maximum(wc, 1)[2] / mm_grid_size + .5) * mm_grid_size
-	xi = minx:grid_size:maxx
-	yi = miny:grid_size:maxy
-	zi = Array(Float64, length(xi), length(yi))
-	wm = mixers[numbuckets][goodindices,source_index]
-	for s = 1:numbuckets
-		z = wm[:, s] 
-		z[z.<1e-6] = 1e-6
-		z = log10(z)
-		@assert length(wc[:,1]) == length(z)
-		@assert length(wc[:,1]) == length(unique(wc[:,1])) || length(wc[:,2]) == length(unique(wc[:,2]))
-		zi = SpatialAnalysis.linear_interpolation(wc[:,1], wc[:,2], z, xi, yi)
-		zmin = minimum(zi)
-		zmin = -3
-		zmax = maximum(zi)
-		dz = ( zmax - zmin ) / 2
-		plt = PyPlot.figure(figsize=(9, 4))
-		PyPlot.imshow(zi, origin="lower", extent=[minx, maxx, miny, maxy], vmin=zmin-dz, vmax=zmax+dz, cmap="jet")
-		PyPlot.colorbar(shrink=0.5, cmap="jet")
-		PyPlot.clim(zmin, zmax)
-		PyPlot.title("Source $s")
-		PyPlot.scatter(wc[:,1], wc[:,2], marker="o", color="black", c=z, s=70, cmap="jet")
-		PyPlot.scatter(wc[:,1], wc[:,2], marker="o", color="white", c=z, s=68, cmap="jet")
-		PyPlot.clim(zmin, zmax)
-		for i = 1:length(wn)
-			PyPlot.annotate(wn[i], xy=(wc[i,1], wc[i,2]), xytext=(-2, 2), fontsize=8, color="white", textcoords="offset points", ha="right", va="bottom", path_effects=[PathEffects.withStroke(linewidth=1, foreground="black")])
+		# remove deep screens
+		goodindices = 1:length(uniquewells)
+		goodindices = filter(i->!contains(uniquewells[i], "_2"), goodindices)
+		wn = uniquewells[goodindices,:]
+		wn = map(i->replace(wn[i], "_1", ""), 1:length(wn))
+		wc = wellcoord[goodindices, :]
+		if length(wc) == 0
+			warn("No well coordinates")
+			continue
 		end
-		PyPlot.yticks([538500, 539500], ["538500", "539500"], rotation="vertical")
-		PyPlot.tight_layout()
-		PyPlot.savefig("results/$(casestring)-$numbuckets-$retries-source-$s.png")
-		PyPlot.close()
-	end
-	selectedspecies =[1,3,5,7]
-	swm = map(i->rMF.mixers[5][goodindices,i] * rMF.buckets[5][i,selectedspecies], source_index)
-	for b = 1:numbuckets
-		for s = 1:length(selectedspecies)
-			z = swm[b][:, s]
-			zmin = minimum(z)
-			zmax = maximum(z)
-			current_species = uniquespecies[selectedspecies[s]]
-			info("Source $b: $current_species")
-			info("Min = $(zmin)")
-			info("Max = $(zmax)")
-			# z[z.<1e-6] = 1e-6
+		grid_size = 100
+		mm_grid_size = grid_size * 5
+		minx = floor(minimum(wc, 1)[1] / mm_grid_size - .5) * mm_grid_size
+		maxx = ceil(maximum(wc, 1)[1] / mm_grid_size + .5) * mm_grid_size
+		miny = floor(minimum(wc, 1)[2] / mm_grid_size - .5) * mm_grid_size
+		maxy = ceil(maximum(wc, 1)[2] / mm_grid_size + .5) * mm_grid_size
+		xi = minx:grid_size:maxx
+		yi = miny:grid_size:maxy
+		zi = Array(Float64, length(xi), length(yi))
+		wm = mixers[numbuckets][goodindices,source_index]
+		for s = 1:numbuckets
+			z = wm[:, s] 
+			z[z.<1e-6] = 1e-6
 			z = log10(z)
 			@assert length(wc[:,1]) == length(z)
 			@assert length(wc[:,1]) == length(unique(wc[:,1])) || length(wc[:,2]) == length(unique(wc[:,2]))
@@ -338,15 +283,12 @@ function getresults(numbuckets=5, keyword::AbstractString=""; retries=10)
 			zmin = minimum(zi)
 			zmin = -3
 			zmax = maximum(zi)
-			if zmin > zmax
-				zmin = minimum(zi)
-			end
-			dz = ( zmax - zmin ) / 2
+			dz = (zmax - zmin) / 2
 			plt = PyPlot.figure(figsize=(9, 4))
 			PyPlot.imshow(zi, origin="lower", extent=[minx, maxx, miny, maxy], vmin=zmin-dz, vmax=zmax+dz, cmap="jet")
 			PyPlot.colorbar(shrink=0.5, cmap="jet")
 			PyPlot.clim(zmin, zmax)
-			PyPlot.title("Source $b: $current_species")
+			PyPlot.title("Source $s")
 			PyPlot.scatter(wc[:,1], wc[:,2], marker="o", color="black", c=z, s=70, cmap="jet")
 			PyPlot.scatter(wc[:,1], wc[:,2], marker="o", color="white", c=z, s=68, cmap="jet")
 			PyPlot.clim(zmin, zmax)
@@ -355,13 +297,49 @@ function getresults(numbuckets=5, keyword::AbstractString=""; retries=10)
 			end
 			PyPlot.yticks([538500, 539500], ["538500", "539500"], rotation="vertical")
 			PyPlot.tight_layout()
-			PyPlot.savefig("results/$(casestring)-$numbuckets-$retries-source-$b-$current_species.png")
+			PyPlot.savefig("results/$(casestring)-$numbuckets-$retries-source-$s.png")
 			PyPlot.close()
 		end
-	end
-	if w
-		warn("Results are loaded from external file `$(filename)`...")
-		warn("Execute `rMF.execute($numbuckets)` to rerun ...")
+		selectedspecies =[1,3,5,7]
+		swm = map(i->rMF.mixers[5][goodindices,i] * rMF.buckets[5][i,selectedspecies], source_index)
+		for b = 1:numbuckets
+			for s = 1:length(selectedspecies)
+				z = swm[b][:, s]
+				zmin = minimum(z)
+				zmax = maximum(z)
+				current_species = uniquespecies[selectedspecies[s]]
+				info("Source $b: $current_species")
+				info("Min = $(zmin)")
+				info("Max = $(zmax)")
+				# z[z.<1e-6] = 1e-6
+				z = log10(z)
+				@assert length(wc[:,1]) == length(z)
+				@assert length(wc[:,1]) == length(unique(wc[:,1])) || length(wc[:,2]) == length(unique(wc[:,2]))
+				zi = SpatialAnalysis.linear_interpolation(wc[:,1], wc[:,2], z, xi, yi)
+				zmin = minimum(zi)
+				zmin = -3
+				zmax = maximum(zi)
+				if zmin > zmax
+					zmin = minimum(zi)
+				end
+				dz = (zmax - zmin) / 2
+				plt = PyPlot.figure(figsize=(9, 4))
+				PyPlot.imshow(zi, origin="lower", extent=[minx, maxx, miny, maxy], vmin=zmin-dz, vmax=zmax+dz, cmap="jet")
+				PyPlot.colorbar(shrink=0.5, cmap="jet")
+				PyPlot.clim(zmin, zmax)
+				PyPlot.title("Source $b: $current_species")
+				PyPlot.scatter(wc[:,1], wc[:,2], marker="o", color="black", c=z, s=70, cmap="jet")
+				PyPlot.scatter(wc[:,1], wc[:,2], marker="o", color="white", c=z, s=68, cmap="jet")
+				PyPlot.clim(zmin, zmax)
+				for i = 1:length(wn)
+					PyPlot.annotate(wn[i], xy=(wc[i,1], wc[i,2]), xytext=(-2, 2), fontsize=8, color="white", textcoords="offset points", ha="right", va="bottom", path_effects=[PathEffects.withStroke(linewidth=1, foreground="black")])
+				end
+				PyPlot.yticks([538500, 539500], ["538500", "539500"], rotation="vertical")
+				PyPlot.tight_layout()
+				PyPlot.savefig("results/$(casestring)-$numbuckets-$retries-source-$b-$current_species.png")
+				PyPlot.close()
+			end
+		end
 	end
 end
 
@@ -373,16 +351,16 @@ function loaddata(casename::AbstractString, keyword::AbstractString="")
 	global fitquality = Array(Float64, maxbuckets)
 	global robustness = Array(Float64, maxbuckets)
 	global ratioindex = Int[]
-	global deltas = nothing
+	global deltas = Array(Float32, 0, 0)
 	global deltaindex = Int[]
 	if casename == "test23delta"
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "B", "δA"]
 		global uniquespecies_long = uniquespecies
-		global datamatrix = [[1., 0.1] [0.1, 1.] [0.1, 1.]]
+		global datamatrix = convert(Array{Float32, 2}, [[1., 0.1] [0.1, 1.] [0.1, 1.]])
 		global deltaindex = Int[3]
 		global deltadependancy = Int[1]
-		global dataindex = collect(1:size(datamatrix,2))
+		global dataindex = collect(1:size(datamatrix, 2))
 		global concindex = setdiff(dataindex, deltaindex)
 		global wellcoord = [[0., 0.] [0., 100.]]
 		info("Concentration matrix:")
@@ -393,7 +371,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString="")
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "B", "A/B"]
 		global uniquespecies_long = uniquespecies
-		global datamatrix = [[1., NaN] [NaN, 2.] [1., 1.]]
+		global datamatrix = convert(Array{Float32, 2}, [[NaN, 2] [1, NaN] [1., 2.]])
 		global ratioindex = Int[3]
 		global ratiocomponents = Int[1, 2]
 		global concindex = setdiff(collect(1:size(datamatrix,2)), ratioindex)
@@ -407,7 +385,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString="")
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "B", "C"]
 		global uniquespecies_long = uniquespecies
-		global datamatrix = [[1., 1.] [2., 4.] [2., 2.]]
+		global datamatrix = convert(Array{Float32,2}, [[1., 1.] [2., 4.] [2., 2.]])
 		global concindex = collect(1:size(datamatrix,2))
 		global dataindex = concindex
 		global wellcoord = [[0., 0.] [0., 100.]]
@@ -416,10 +394,12 @@ function loaddata(casename::AbstractString, keyword::AbstractString="")
 		return
 	end
 	rawdata = readcsv("data/" * casename * ".csv")
+	rawdata[rawdata .== " "] = NaN
+	rawdata[rawdata .== ""] = NaN
 	global uniquewells = rawdata[2:end, 1]
 	global uniquespecies = rawdata[1, 2:end]'
 	global uniquespecies_long = uniquespecies
-	global datamatrix = rawdata[2:end, 2:end]
+	global datamatrix = convert(Array{Float32,2}, rawdata[2:end, 2:end])
 	global concindex = collect(1:size(datamatrix,2))
 	global dataindex = concindex
 	info("Species ($(length(uniquespecies)))")
@@ -427,9 +407,6 @@ function loaddata(casename::AbstractString, keyword::AbstractString="")
 	info("Wells ($(length(uniquewells)))")
 	display(uniquewells)
 	info("Concentration matrix:")
-	datamatrix[datamatrix .== " "] = NaN
-	datamatrix[datamatrix .== ""] = NaN
-	datamatrix = Array{Float32}(datamatrix)
 	display([["Wells"; uniquespecies]'; uniquewells datamatrix])
 	return
 end
@@ -442,10 +419,14 @@ function loaddata(probstamp::Int64=20160102, probkey::AbstractString="", keyword
 	global fitquality = Array(Float64, maxbuckets)
 	global robustness = Array(Float64, maxbuckets)
 	global case = probstamp
-	global dict = JLD.load("dictionary$(dictstamp)ordered.jld","dictionary")
-	# mixes = JLD.load("mixtures$(timestamp).jld","mixtures")
-	rawwells = readcsv("data/wells$(probstamp).csv")[2:end,[1,2,4,5,10]]
-	rawpz = readcsv("data/pz$(probstamp).csv")[2:end,[1,2,4,5,10]]
+	if isfile("cr-species-order-$(dictstamp).jld")
+		global dict = JLD.load("cr-species-order-$(dictstamp).jld", "dictionary")
+	else
+		dict = Dict()
+	end
+	# mixes = JLD.load("data/cr-stable-isotope-mixtures-$(probstamp).jld", "mixtures")
+	rawwells = readcsv("data/cr-data-wells$(probstamp).csv")[2:end,[1,2,4,5,10]]
+	rawpz = readcsv("data/cr-data-pz$(probstamp).csv")[2:end,[1,2,4,5,10]]
 	rawdata = [rawwells; rawpz]
 	wells = rawdata[:, 1]
 	dates = rawdata[:, 2]
@@ -487,7 +468,7 @@ function loaddata(probstamp::Int64=20160102, probkey::AbstractString="", keyword
 	global uniquespecies_long = collect(keys(dict))
 	name2j = Dict(zip(uniquespecies, 1:length(uniquespecies)))
 	datacount = zeros(Int, length(uniquewells), length(uniquespecies))
-	datamatrix = zeros(Float64, length(uniquewells), length(uniquespecies))
+	datamatrix = zeros(Float32, length(uniquewells), length(uniquespecies))
 	for index = 1:length(wells)
 		i = wells2i[wells[index]]
 		if haskey(name2j, names[index])
@@ -506,11 +487,11 @@ function loaddata(probstamp::Int64=20160102, probkey::AbstractString="", keyword
 	display([uniquewells sum(datacount,2)])
 	info("Observations per species:")
 	display([uniquespecies sum(datacount,1)'])
-	global datamatrix = datamatrix ./ datacount # gives NaN if there is no data, otherwise divides by the number of results
+	global datamatrix = convert(Array{Float32,2}, datamatrix ./ datacount) # gives NaN if there is no data, otherwise divides by the number of results
 	info("Concentration matrix:")
 	display([["Wells"; uniquespecies]'; uniquewells datamatrix])
 	global concindex = collect(1:size(datamatrix,2))
-	coord, coordheader = readdlm("data/coord$(probstamp).dat", header=true)
+	coord, coordheader = readdlm("data/cr-well-coord-$(probstamp).dat", header=true)
 	global wellcoord = Array(Float64, length(uniquewells), 2)
 	for index = 1:length(uniquewells)
 		i = indexin([uniquewells[index]], coord[:,1])[1]
@@ -540,21 +521,22 @@ end
 """
 Perform rMF analyses
 """
-function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, scale::Bool=true, mixtures::Bool=true, regularizationweight::Number=0, matchwaterdeltas::Bool=false, quiet::Bool=true)
+function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtures::Bool=true, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, matchwaterdeltas::Bool=false, quiet::Bool=true)
 	if sizeof(datamatrix) == 0
 		warn("Execute `rMF.loaddata()` first!")
 		return
 	end
+	concmatrix = datamatrix
 	if length(ratioindex) > 0
-		nummixtures = size(datamatrix, 1)
-		numconstituents = size(datamatrix, 2)
 		concmatrix = datamatrix[:, concindex]
 		ratiomatrix = datamatrix[:, ratioindex]
+		nummixtures = size(concmatrix, 1)
+		numconstituents = size(concmatrix, 2)
 		info("Mixtures matrix:")
 		display([["Wells"; uniquespecies[concindex]]'; uniquewells concmatrix])
 		info("Ratio matrix:")
 		display([["Wells"; uniquespecies[ratioindex]]'; uniquewells ratiomatrix])
-		ratios = fill(NaN, nummixtures, numconstituents, numconstituents)
+		ratios = convert(Array{Float32, 3}, fill(NaN, nummixtures, numconstituents, numconstituents))
 		for i = 1:nummixtures
 			for j = 1:size(ratiocomponents, 2)
 				a = ratiocomponents[1, j]
@@ -563,12 +545,9 @@ function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, scale
 			end
 		end
 	else
-		concmatrix = datamatrix
 		ratios = nothing
 	end
 	if length(deltaindex) > 0
-		nummixtures = size(datamatrix, 1)
-		numconstituents = size(datamatrix, 2)
 		concmatrix = datamatrix[:, concindex]
 		deltamatrix = datamatrix[:, deltaindex]
 		info("Mixtures matrix:")
@@ -576,12 +555,11 @@ function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, scale
 		info("Delta matrix:")
 		display([["Wells"; uniquespecies[deltaindex]]'; uniquewells deltamatrix])
 	else
-		concmatrix = datamatrix
-		deltamatrix = nothing
+		deltamatrix = Array(Float32, 0, 0)
 	end
 	for numbuckets = range
 		# NMFk using mixmatch 
-		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(concmatrix, retries, numbuckets; deltas=deltamatrix, deltaindices=deltadependancy, ratios=ratios, mixmatch=mixmatch, scale=scale, matchwaterdeltas=matchwaterdeltas, mixtures=mixtures, quiet=quiet, regularizationweight=regularizationweight)
+		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(concmatrix, retries, numbuckets; deltas=deltamatrix, deltaindices=deltadependancy, ratios=ratios, mixmatch=mixmatch, normalize=normalize, scale=scale, matchwaterdeltas=matchwaterdeltas, mixtures=mixtures, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse)
 		mixsum = sum(mixers[numbuckets], 2)
 		index = find(mixsum .> 1.1) | find(mixsum .< 0.9)
 		if length(index) > 0
