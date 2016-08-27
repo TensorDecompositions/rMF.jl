@@ -19,18 +19,20 @@ mixers = Array(Array{Float64, 2}, maxbuckets)
 buckets = Array(Array{Float64, 2}, maxbuckets)
 fitquality = Array(Float64, maxbuckets)
 robustness = Array(Float64, maxbuckets)
-deltadependancy = Int[]
-dict = Dict()
+deltadependency = Int[]
+dict_species = Dict()
+uniquewells = []
+uniquespecies = []
 
 #=
-dict = DataStructures.OrderedDict{AbstractString,AbstractString}(
+dict_species = DataStructures.OrderedDict{AbstractString,AbstractString}(
 	"Chromium"=>"Cr",
 	"Chromium-53/52"=>"δ53Cr",
 	"Bromide"=>"Br-",
 	"Chloride"=>"Cl-",
 	"Chlorate"=>"ClO3",
 	"Perchlorate"=>"ClO4",
-	"Chlorine-36/Chlorine Ratio (e-15)"=>"Cl36",
+	"Chlorine-36/Chlorine Ratio (e-15)"=>"δCl36",
 	"Tritium"=>"3H",
 	"Deuterium Ratio"=>"δ2H",
 	"Oxygen-18/Oxygen-16 Ratio"=>"δ18O",
@@ -40,13 +42,36 @@ dict = DataStructures.OrderedDict{AbstractString,AbstractString}(
 	"Sulfate"=>"SO4",
 	"Sulfur-34/Sulfur-32 Ratio (SO4)"=>"δ34S-SO4",
 	"Oxygen-18/Oxygen-16 Ratio from SO4"=>"δ18O-SO4",
-	"Iodine-129/Iodine Ratio (e-15)"=>"I129",
+	"Iodine-129/Iodine Ratio (e-15)"=>"δI129",
 	"Fraction Modern Carbon (de-normalized)"=>"f14C",
 	"Dioxane[1,4-]"=>"Dioxane",
 	"Acetaminophen"=>"Acetam",
 	"Caffeine"=>"Caffe",
 	"Sulfamethoxazole"=>"Sulfame")
-JLD.save("dictionary20160202ordered.jld","dictionary",dict)
+JLD.save("data/cr-species.jld", "species", dict_species)
+
+mixtures = DataStructures.OrderedDict{Any,Any}(
+	"Cr"=>Any[],
+	"δ53Cr"=>ASCIIString["Cr"],
+	"Cl-"=>Any[],
+	"ClO3"=>Any[],
+	"ClO4"=>Any[],
+	"δCl36"=>ASCIIString["Cl-"],
+	"3H"=>Any[],
+	"δ2H"=>Any[],
+	"δ18O"=>Any[],
+	"NO3"=>Any[],
+	"δ15N"=>ASCIIString["NO3"],
+	"δ18O-NO3"=>ASCIIString["NO3"],
+	"SO4"=>Any[],
+	"δ34S-SO4"=>ASCIIString["SO4"],
+	"δ18O-SO4"=>ASCIIString["SO4"],
+	"δI129"=>Any[],
+	"Dioxane"=>Any[],
+	"Acetam"=>Any[],
+	"Caffe"=>Any[],
+	"Sulfame"=>Any[])
+JLD.save("data/cr-stable-isotope-mixtures.jld", "mixtures", mixtures)
 =#
 
 info("rMF (Robust Matrix Factorization)")
@@ -123,9 +148,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			indexmissing = find(wellmissing)
 			wellavailable = wellorder .!= 0
 			indexavailale = find(wellavailable)
-			if length(indexmissing) > 0 && length(indexavailale) != 0
-				warn("Well(s) $(wellnameorder[indexmissing]) is not accounted!")
-			else
+			if length(indexmissing) > 0
 				wellorder = 1:length(uniquewells)
 				wellnameorder = uniquewells
 			end
@@ -142,7 +165,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			H_deltas = buckets[numbuckets][:,numconc+1:end]
 			predictions = similar(datamatrix)
 			predictions[:, concindex] = mixers[numbuckets] * H_conc
-			predictions[:, deltaindex] = MixMatch.computedeltas(mixers[numbuckets], H_conc, H_deltas, deltadependancy)
+			predictions[:, deltaindex] = MixMatch.computedeltas(mixers[numbuckets], H_conc, H_deltas, findin(concindex, deltadependency))
 		else
 			predictions = mixers[numbuckets] * buckets[numbuckets]
 		end
@@ -351,15 +374,29 @@ function loaddata(casename::AbstractString, keyword::AbstractString="")
 	global fitquality = Array(Float64, maxbuckets)
 	global robustness = Array(Float64, maxbuckets)
 	global ratioindex = Int[]
-	global deltas = Array(Float32, 0, 0)
 	global deltaindex = Int[]
+	global deltadependency = Int[]
 	if casename == "test23delta"
+		global uniquewells = ["W1", "W2"]
+		global uniquespecies = ["δA", "A", "B"]
+		global uniquespecies_long = uniquespecies
+		global datamatrix = convert(Array{Float32, 2}, [[0.1, 1.] [1., 0.1] [0.1, 1.]])
+		global deltaindex = Int[1]
+		global deltadependency = Int[2]
+		global dataindex = collect(1:size(datamatrix, 2))
+		global concindex = setdiff(dataindex, deltaindex)
+		global wellcoord = [[0., 0.] [0., 100.]]
+		info("Concentration matrix:")
+		display([["Wells"; uniquespecies]'; uniquewells datamatrix])
+		return
+	end
+	if casename == "test23delta2"
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "B", "δA"]
 		global uniquespecies_long = uniquespecies
 		global datamatrix = convert(Array{Float32, 2}, [[1., 0.1] [0.1, 1.] [0.1, 1.]])
 		global deltaindex = Int[3]
-		global deltadependancy = Int[1]
+		global deltadependency = Int[1]
 		global dataindex = collect(1:size(datamatrix, 2))
 		global concindex = setdiff(dataindex, deltaindex)
 		global wellcoord = [[0., 0.] [0., 100.]]
@@ -411,22 +448,103 @@ function loaddata(casename::AbstractString, keyword::AbstractString="")
 	return
 end
 
-function loaddata(probstamp::Int64=20160102, probkey::AbstractString="", keyword::AbstractString="")
-	dictstamp = probstamp
-	global casekeyword = probkey * keyword
+function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsset::AbstractString="", speciesset::AbstractString="")
+	casestring = keyword
+	if wellsset != ""
+		if casestring != ""
+			casestring = casestring * "-w" * wellsset
+		else
+			casestring = "w" * wellsset
+		end
+	end
+	if speciesset != ""
+		if casestring != ""
+			casestring = casestring * "-s" * speciesset
+		else
+			casestring = "s" * speciesset
+		end
+	end
+	global casekeyword = casestring
+	global case = "cr-$probstamp"
 	global mixers = Array(Array{Float64, 2}, maxbuckets)
 	global buckets = Array(Array{Float64, 2}, maxbuckets)
 	global fitquality = Array(Float64, maxbuckets)
 	global robustness = Array(Float64, maxbuckets)
-	global case = probstamp
-	if isfile("cr-species-order-$(dictstamp).jld")
-		global dict = JLD.load("cr-species-order-$(dictstamp).jld", "dictionary")
+	global ratioindex = Int[]
+	filename = "data/cr-species.jld"
+	if isfile(filename)
+		global dict_species = JLD.load(filename, "species")
+		global uniquespecies = collect(values(dict_species))
+		global uniquespecies_long = collect(keys(dict_species))
+		if speciesset != ""
+			filename = "data/cr-species-set$(speciesset).txt"
+			if isfile(filename)
+				ss = readdlm(filename)
+				sd = setdiff(ss, uniquespecies)
+				if length(sd) > 0
+					error("There are species in $filename missing!")
+					display(sd)
+					return
+				end
+				sd = setdiff(uniquespecies, ss)
+				if length(sd) > 0
+					warn("The following species will be removed!")
+					display(sd)
+					ind = indexin(uniquespecies, ss)
+					ind = ind[ind .> 0]
+					global uniquespecies = uniquespecies[ind]
+					global uniquespecies_long = uniquespecies_long[ind]
+				end
+				dnames = ss
+			else
+				error("$filename is missing!")
+				return
+			end
+		end
 	else
-		dict = Dict()
+		error("$filename is missing!")
+		return
 	end
-	# mixes = JLD.load("data/cr-stable-isotope-mixtures-$(probstamp).jld", "mixtures")
-	rawwells = readcsv("data/cr-data-wells$(probstamp).csv")[2:end,[1,2,4,5,10]]
-	rawpz = readcsv("data/cr-data-pz$(probstamp).csv")[2:end,[1,2,4,5,10]]
+	filename = "data/cr-stable-isotope-mixtures.jld"
+	if isfile(filename)
+		isotope_mixtures = JLD.load(filename, "mixtures")
+		deltaindex = Int[]
+		deltadependency = Int[]
+		i = 1
+		for s in uniquespecies
+			if haskey(isotope_mixtures, s)
+				ind = findin(uniquespecies, isotope_mixtures[s])
+				lind = length(ind)
+				if lind == 1
+					push!(deltaindex, i)
+					push!(deltadependency, ind[1])
+				elseif lind > 1
+					error("More than one stable isotope dependency for $s")
+					display(uniquespecies[ind])
+					return
+				end
+			end
+			i += 1
+		end
+		global deltaindex = deltaindex
+		global deltadependency = deltadependency
+	else
+		warn("$filename is missing!")
+	end
+	filename = "data/cr-data-wells-$(probstamp).csv"
+	if isfile(filename)
+		rawwells = readcsv(filename)[2:end,[1,2,4,5,10]]
+	else
+		error("$filename is missing!")
+		return
+	end
+	filename = "data/cr-data-pz-$(probstamp).csv"
+	if isfile(filename)
+		rawpz = readcsv(filename)[2:end,[1,2,4,5,10]]
+	else
+		error("$filename is missing!")
+		return
+	end
 	rawdata = [rawwells; rawpz]
 	wells = rawdata[:, 1]
 	dates = rawdata[:, 2]
@@ -438,17 +556,42 @@ function loaddata(probstamp::Int64=20160102, probkey::AbstractString="", keyword
 	info("Total data record count $(length(longnames))")
 	# set the "cool" (short) variable names
 	for i in 1:length(longnames)
-		if haskey(dict, longnames[i])
-			names[i] = dict[longnames[i]]
+		if haskey(dict_species, longnames[i])
+			names[i] = dict_species[longnames[i]]
 		end
 	end
-	goodindices = 1:length(names)
-	# remove MCOI LAOI SCI R-6i TA-53i
-	goodindices = filter(i->!contains(wells[i], "MCOI"), goodindices)
-	goodindices = filter(i->!contains(wells[i], "LAOI"), goodindices)
-	goodindices = filter(i->!contains(wells[i], "SCI"), goodindices)
-	goodindices = filter(i->!contains(wells[i], "R-6i"), goodindices)
-	goodindices = filter(i->!contains(wells[i], "TA-53i"), goodindices)
+	goodindices = 1:length(wells)
+	if wellsset == ""
+		# remove MCOI LAOI SCI R-6i TA-53i
+		goodindices = filter(i->!contains(wells[i], "MCOI"), goodindices)
+		goodindices = filter(i->!contains(wells[i], "LAOI"), goodindices)
+		goodindices = filter(i->!contains(wells[i], "SCI"), goodindices)
+		goodindices = filter(i->!contains(wells[i], "R-6i"), goodindices)
+		goodindices = filter(i->!contains(wells[i], "TA-53i"), goodindices)
+	else
+		filename = "data/cr-wells-set$(wellsset).txt"
+		if isfile(filename)
+			ws = readdlm(filename)
+			wu = unique(wells)
+			sd = setdiff(ws, wu)
+			if length(sd) > 0
+				error("There are wells in $filename missing!")
+				display(sd)
+				return
+			end
+			sd = setdiff(wu, ws)
+			if length(sd) > 0
+				warn("The following wells will be removed!")
+				display(sd)
+			end
+			for w in sd
+				goodindices = filter(i->!contains(wells[i], w), goodindices)
+			end
+		else
+			error("$filename is missing!")
+			return
+		end
+	end
 	# remove ratios
 	# goodindices = filter(i->!contains(longnames[i], "ratio"), goodindices)
 	# goodindices = filter(i->!contains(longnames[i], "Ratio"), goodindices)
@@ -463,9 +606,6 @@ function loaddata(probstamp::Int64=20160102, probkey::AbstractString="", keyword
 	info("Processed data record count $(length(names))")
 	global uniquewells = unique(wells)
 	wells2i = Dict(zip(uniquewells, 1:length(uniquewells)))
-	dnames = collect(values(dict))
-	global uniquespecies = dnames
-	global uniquespecies_long = collect(keys(dict))
 	name2j = Dict(zip(uniquespecies, 1:length(uniquespecies)))
 	datacount = zeros(Int, length(uniquewells), length(uniquespecies))
 	datamatrix = zeros(Float32, length(uniquewells), length(uniquespecies))
@@ -490,8 +630,9 @@ function loaddata(probstamp::Int64=20160102, probkey::AbstractString="", keyword
 	global datamatrix = convert(Array{Float32,2}, datamatrix ./ datacount) # gives NaN if there is no data, otherwise divides by the number of results
 	info("Concentration matrix:")
 	display([["Wells"; uniquespecies]'; uniquewells datamatrix])
-	global concindex = collect(1:size(datamatrix,2))
-	coord, coordheader = readdlm("data/cr-well-coord-$(probstamp).dat", header=true)
+	global dataindex = collect(1:size(datamatrix, 2))
+	global concindex = setdiff(dataindex, deltaindex)
+	coord, coordheader = readdlm("data/cr-well-coord.dat", header=true)
 	global wellcoord = Array(Float64, length(uniquewells), 2)
 	for index = 1:length(uniquewells)
 		i = indexin([uniquewells[index]], coord[:,1])[1]
@@ -505,7 +646,7 @@ function loaddata(probstamp::Int64=20160102, probkey::AbstractString="", keyword
 	info("Check species in the dictionary ...")
 	uniquelongnames = unique(longnames)
 	for i in 1:length(uniquelongnames)
-		if !haskey(dict, uniquelongnames[i])
+		if !haskey(dict_species, uniquelongnames[i])
 			warn("Species name $(uniquelongnames[i]) in the data set is not defined in the dictionary!")
 		end
 	end
@@ -550,21 +691,23 @@ function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtu
 	if length(deltaindex) > 0
 		concmatrix = datamatrix[:, concindex]
 		deltamatrix = datamatrix[:, deltaindex]
+		deltaindices = findin(concindex, deltadependency)
 		info("Mixtures matrix:")
 		display([["Wells"; uniquespecies[concindex]]'; uniquewells concmatrix])
 		info("Delta matrix:")
 		display([["Wells"; uniquespecies[deltaindex]]'; uniquewells deltamatrix])
 	else
+		deltaindices = deltadependency
 		deltamatrix = Array(Float32, 0, 0)
 	end
 	for numbuckets = range
 		# NMFk using mixmatch 
-		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(concmatrix, retries, numbuckets; deltas=deltamatrix, deltaindices=deltadependancy, ratios=ratios, mixmatch=mixmatch, normalize=normalize, scale=scale, matchwaterdeltas=matchwaterdeltas, mixtures=mixtures, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse)
+		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(concmatrix, retries, numbuckets; deltas=deltamatrix, deltaindices=deltaindices, ratios=ratios, mixmatch=mixmatch, normalize=normalize, scale=scale, matchwaterdeltas=matchwaterdeltas, mixtures=mixtures, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse)
 		mixsum = sum(mixers[numbuckets], 2)
 		index = find(mixsum .> 1.1) | find(mixsum .< 0.9)
 		if length(index) > 0
 			warn("The mixers do not add to 1")
-			@show sum(mixers[numbuckets], 2)
+			display(sum(mixers[numbuckets], 2))
 			display(mixers[numbuckets])
 		end
 		println("Buckets = $numbuckets; Best objective function = $(fitquality[numbuckets]); Robustness = $(robustness[numbuckets])")
