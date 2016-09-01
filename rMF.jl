@@ -165,7 +165,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			H_deltas = buckets[numbuckets][:,numconc+1:end]
 			predictions = similar(datamatrix)
 			predictions[:, concindex] = mixers[numbuckets] * H_conc
-			predictions[:, deltaindex] = MixMatch.computedeltas(mixers[numbuckets], H_conc, H_deltas, findin(concindex, deltadependency))
+			predictions[:, deltaindex] = MixMatch.computedeltas(mixers[numbuckets], H_conc, H_deltas, indexin(deltadependency, concindex))
 		else
 			predictions = mixers[numbuckets] * buckets[numbuckets]
 		end
@@ -691,7 +691,7 @@ function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtu
 	if length(deltaindex) > 0
 		concmatrix = datamatrix[:, concindex]
 		deltamatrix = datamatrix[:, deltaindex]
-		deltaindices = findin(concindex, deltadependency)
+		deltaindices = indexin(deltadependency, concindex)
 		info("Mixtures matrix:")
 		display([["Wells"; uniquespecies[concindex]]'; uniquewells concmatrix])
 		info("Delta matrix:")
