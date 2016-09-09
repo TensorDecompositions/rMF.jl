@@ -223,29 +223,41 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		writedlm(f, [["Wells"; uniquespecies]'; wellnameorder relerrors[wellorder, :]]')
 		close(f)
 		info("Max/min Species in Buckets:")
-		maxs = maximum(buckets[numbuckets], 1)
-		mins = minimum(buckets[numbuckets], 1)
-		display([uniquespecies[dataindex] maxs' mins'])
+		maxs1 = maximum(buckets[numbuckets], 1)
+		mins1 = minimum(buckets[numbuckets], 1)
+		display([uniquespecies[dataindex] maxs1' mins1'])
+		info("Max/min Species in Buckets:")
+		maxs2 = maximum(buckets[numbuckets], 2)
+		mins2 = minimum(buckets[numbuckets], 2)
+		display([maxs2' mins2'])
 		info("Mixers:")
 		display([uniquewells mixers[numbuckets]])
 		info("Buckets:")
 		display([uniquespecies[dataindex] buckets[numbuckets]'])
 		info("Normalized buckets:")
-		for i=1:length(maxs)
-			if maxs[i] == mins[i]
-				mins[i] = 0
+		for i=1:length(maxs1)
+			if maxs1[i] == mins1[i]
+				mins1[i] = 0
 			end
 		end
-		nbuckets = (buckets[numbuckets] .- mins) ./ (maxs - mins)
+		for i=1:length(maxs2)
+			if maxs2[i] == mins2[i]
+				mins2[i] = 0
+			end
+		end
+		nbuckets = (buckets[numbuckets] .- mins1) ./ (maxs1 - mins1)
 		display([uniquespecies[dataindex] nbuckets'])
-		source_weight = sum(nbuckets, 2)
+		source_weight = sum(mixers[numbuckets], 1)
 		source_index = sortperm(collect(source_weight), rev=true)
-		info("Sorted normalized buckets:")
+		info("Sorted buckets normalized by overall species dominance:")
 		sbuckets = nbuckets[source_index,:]
 		display([uniquespecies[dataindex] sbuckets'])
-		info("Sorted buckets:")
-		s2buckets = buckets[numbuckets][source_index,:]
+		info("Sorted buckets normalized by species dominance within each bucket:")
+		n2buckets = (buckets[numbuckets] .- mins2) ./ (maxs2 - mins2)
+		s2buckets = n2buckets[source_index,:]
 		display([uniquespecies[dataindex] s2buckets'])
+		info("Sorted buckets:")
+		display([uniquespecies[dataindex] buckets[numbuckets][source_index,:]'])
 		# sbuckets[sbuckets.<1e-6] = 1e-6
 		gbucket = Gadfly.spy(sbuckets', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
 					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"),
@@ -255,6 +267,15 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		filename = "results/$(casestring)-$numbuckets-$retries-buckets.svg"
 		Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
 		filename = "results/$(casestring)-$numbuckets-$retries-buckets.png"
+		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
+		gbucket = Gadfly.spy(s2buckets', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
+					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"),
+					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
+					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
+		# filename, format = Mads.setimagefileformat(filename, format)
+		filename = "results/$(casestring)-$numbuckets-$retries-buckets2.svg"
+		Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
+		filename = "results/$(casestring)-$numbuckets-$retries-buckets2.png"
 		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
 
 		info("Sorted mixers:")
