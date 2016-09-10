@@ -157,7 +157,9 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			wellnameorder = uniquewells		
 		end
 
+		spredictions = Array(Array{Float64, 2}, numbuckets)
 		if length(deltaindex) > 0
+			numwells = size(datamatrix, 1)
 			numconstituents = size(datamatrix, 2)
 			numdeltas = length(deltaindex)
 			numconc = numconstituents - numdeltas
@@ -166,14 +168,23 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			predictions = similar(datamatrix)
 			predictions[:, concindex] = mixers[numbuckets] * H_conc
 			predictions[:, deltaindex] = MixMatch.computedeltas(mixers[numbuckets], H_conc, H_deltas, indexin(deltadependency, concindex))
+			for i = 1:numbuckets
+				spredictions[i] = similar(datamatrix)
+				spredictions[i][:, concindex] = mixers[numbuckets][:,i] * H_conc[i,:]
+				spredictions[i][:, deltaindex] = MixMatch.computedeltas(reshape(mixers[numbuckets][:,i], numwells, 1), H_conc[i,:], H_deltas[i,:], indexin(deltadependency, concindex))
+			end
 		else
 			predictions = mixers[numbuckets] * buckets[numbuckets]
+			for i = 1:numbuckets
+				spredictions[i] = similar(datamatrix)
+				spredictions[i] = mixers[numbuckets][:,i] * H_conc[i,:]
+			end
 		end
 		if length(ratioindex) > 0
 			info("Compute ratios:")
 			p = similar(datamatrix)
 			p[:, concindex] = predictions
-			for i = 1:size(predictions, 1)
+			for i = 1:numwells
 				for j = 1:size(ratiocomponents, 2)
 					a = ratiocomponents[1, j]
 					b = ratiocomponents[2, j]
@@ -181,6 +192,18 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 				end
 			end
 			predictions = p
+			for i = 1:numbuckets
+				p = similar(datamatrix)
+				p[:, concindex] = spredictions[i]
+				for i = 1:numwells
+					for j = 1:size(ratiocomponents, 2)
+						a = ratiocomponents[1, j]
+						b = ratiocomponents[2, j]
+						p[i, ratioindex[j]] = p[i, a] / p[i, b]
+					end
+				end
+				spredictions[i] = p
+			end
 		end
 
 		indexnan = isnan(datamatrix)
@@ -207,11 +230,21 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		writedlm(f, [["Wells"; uniquespecies]'; wellnameorder datamatrix[wellorder, :]]')
 		close(f)
 
+		source_weight = sum(mixers[numbuckets], 1)
+		source_index = sortperm(collect(source_weight), rev=true)
+
 		info("Predictions:")
 		display([["Wells"; uniquespecies]'; wellnameorder predictions[wellorder, :]]')
 		f = open("results/$(casestring)-$numbuckets-$retries-predictions.dat", "w")
 		writedlm(f, [["Wells"; uniquespecies]'; wellnameorder predictions[wellorder, :]]')
 		close(f)
+		info("Predictions for each bucket:")
+		for i = 1:numbuckets
+			info("Predictions for bucket #$(i)")
+			display([["Wells"; uniquespecies]'; wellnameorder spredictions[source_index[i]][wellorder, :]]')
+			f = open("results/$(casestring)-$numbuckets-$retries-bucket-$i-predictions.dat", "w")
+			writedlm(f, [["Wells"; uniquespecies]'; wellnameorder spredictions[source_index[i]][wellorder, :]]')
+		end
 		info("Match errors:")
 		display([["Wells"; uniquespecies]'; wellnameorder errors[wellorder, :]]')
 		f = open("results/$(casestring)-$numbuckets-$retries-errors.dat", "w")
@@ -247,8 +280,6 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		end
 		nbuckets = (buckets[numbuckets] .- mins1) ./ (maxs1 - mins1)
 		display([uniquespecies[dataindex] nbuckets'])
-		source_weight = sum(mixers[numbuckets], 1)
-		source_index = sortperm(collect(source_weight), rev=true)
 		info("Sorted buckets normalized by overall species dominance:")
 		sbuckets = nbuckets[source_index,:]
 		display([uniquespecies[dataindex] sbuckets'])
