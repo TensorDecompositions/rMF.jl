@@ -12,13 +12,13 @@ import PyPlot
 
 @PyCall.pyimport matplotlib.patheffects as PathEffects
 
-maxbuckets = 10
+bucketimpact = 10
 case = ""
 casekeyword = ""
-mixers = Array(Array{Float64, 2}, maxbuckets)
-buckets = Array(Array{Float64, 2}, maxbuckets)
-fitquality = Array(Float64, maxbuckets)
-robustness = Array(Float64, maxbuckets)
+mixers = Array(Array{Float64, 2}, bucketimpact)
+buckets = Array(Array{Float64, 2}, bucketimpact)
+fitquality = Array(Float64, bucketimpact)
+robustness = Array(Float64, bucketimpact)
 deltadependency = Int[]
 dict_species = Dict()
 uniquewells = []
@@ -32,7 +32,7 @@ dict_species = DataStructures.OrderedDict{AbstractString,AbstractString}(
 	"Chloride"=>"Cl-",
 	"Chlorate"=>"ClO3",
 	"Perchlorate"=>"ClO4",
-	"Chlorine-36/Chlorine Ratio (e-15)"=>"δCl36",
+	"Chlorine-36/Chlorine Ratio (e-15)"=>"δ36Cl",
 	"Tritium"=>"3H",
 	"Deuterium Ratio"=>"δ2H",
 	"Oxygen-18/Oxygen-16 Ratio"=>"δ18O",
@@ -56,7 +56,7 @@ mixtures = DataStructures.OrderedDict{Any,Any}(
 	"Cl-"=>Any[],
 	"ClO3"=>Any[],
 	"ClO4"=>Any[],
-	"δCl36"=>ASCIIString["Cl-"],
+	"δ36Cl"=>ASCIIString["Cl-"],
 	"3H"=>Any[],
 	"δ2H"=>Any[],
 	"δ18O"=>Any[],
@@ -81,7 +81,7 @@ info("Use `rMF.execute(5, retries=50)` to compute the results for the 5 bucket c
 info("Use `rMF.getresults(5, retries=50)` to get the results for the 5 bucket case.")
 info("Use `rMF.getresults(5:6, retries=50; brief=true)` to see the results for bucket cases 5 to 8.")
 
-function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::AbstractString=""; retries=10, brief::Bool=false)
+function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::AbstractString=""; retries=10, brief::Bool=false)
 	if keyword != ""
 		if case != "" && !contains(keyword, case)
 			casestring = case * "-" * keyword
@@ -156,11 +156,14 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			wellorder = 1:length(uniquewells)
 			wellnameorder = uniquewells		
 		end
+		
+		numwells = size(datamatrix, 1)
+		numconstituents = size(datamatrix, 2)
+		@assert numwells == length(wellnameorder)
+		@assert numconstituents == length(uniquespecies)
 
 		spredictions = Array(Array{Float64, 2}, numbuckets)
 		if length(deltaindex) > 0
-			numwells = size(datamatrix, 1)
-			numconstituents = size(datamatrix, 2)
 			numdeltas = length(deltaindex)
 			numconc = numconstituents - numdeltas
 			H_conc = buckets[numbuckets][:,1:numconc]
@@ -168,11 +171,15 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			predictions = similar(datamatrix)
 			predictions[:, concindex] = mixers[numbuckets] * H_conc
 			predictions[:, deltaindex] = MixMatch.computedeltas(mixers[numbuckets], H_conc, H_deltas, indexin(deltadependency, concindex))
+			tpredictions = zeros(size(datamatrix))
 			for i = 1:numbuckets
 				spredictions[i] = similar(datamatrix)
 				spredictions[i][:, concindex] = mixers[numbuckets][:,i] * H_conc[i,:]
-				spredictions[i][:, deltaindex] = MixMatch.computedeltas(reshape(mixers[numbuckets][:,i], numwells, 1), H_conc[i,:], H_deltas[i,:], indexin(deltadependency, concindex))
+				spredictions[i][:, deltaindex] = MixMatch.computedeltas(reshape(mixers[numbuckets][:,i], numwells, 1), H_conc[i,:], H_deltas[i,:], indexin(deltadependency, concindex), compute_contributions=true)
+				tpredictions = tpredictions + spredictions[i]
 			end
+			tpredictions[:, deltaindex] .*= predictions[:, deltaindex] ./ tpredictions[:, deltaindex]
+			@Base.Test.test_approx_eq_eps maximum(abs(predictions .- tpredictions)) 0 1e-3
 		else
 			predictions = mixers[numbuckets] * buckets[numbuckets]
 			for i = 1:numbuckets
@@ -214,6 +221,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		of = sum(errors.^2)
 		errors[indexnan] = NaN
 		relerrors = errors ./ d
+
 		relerrors[indexnan] = NaN
 		if brief
 			println("Buckets = $numbuckets; Best objective function = $(fitquality[numbuckets]) (check = $(of)); Robustness = $(robustness[numbuckets])")
@@ -245,24 +253,41 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			f = open("results/$(casestring)-$numbuckets-$retries-bucket-$i-predictions.dat", "w")
 			writedlm(f, [["Wells"; uniquespecies]'; wellnameorder spredictions[source_index[i]][wellorder, :]]')
 		end
+
 		info("Match errors:")
 		display([["Wells"; uniquespecies]'; wellnameorder errors[wellorder, :]]')
 		f = open("results/$(casestring)-$numbuckets-$retries-errors.dat", "w")
 		writedlm(f, [["Wells"; uniquespecies]'; wellnameorder errors[wellorder, :]]')
 		close(f)
+		indmaxerror = ind2sub(size(errors), indmax(abs(errors)))
+		info("The largest absolute match error is for $(wellnameorder[indmaxerror[1]]) / $(uniquespecies[indmaxerror[2]]).")
+		println("Observation: $(datamatrix[indmaxerror...])")
+		println("Prediction: $(predictions[indmaxerror...])")
+		println("Error: $(errors[indmaxerror...])")
+		println("Relative error: $(relerrors[indmaxerror...])")
+		display([["Wells"; uniquespecies]'; wellnameorder[indmaxerror[1]] errors[indmaxerror[1], :]]')
+
 		info("Relative match errors:")
 		display([["Wells"; uniquespecies]'; wellnameorder relerrors[wellorder, :]]')
 		f = open("results/$(casestring)-$numbuckets-$retries-relerrors.dat", "w")
 		writedlm(f, [["Wells"; uniquespecies]'; wellnameorder relerrors[wellorder, :]]')
 		close(f)
-		info("Max/min Species in Buckets:")
+		indmaxerror = ind2sub(size(relerrors), indmax(abs(relerrors)))
+		info("The largest absolute relative match error is for $(wellnameorder[indmaxerror[1]]) / $(uniquespecies[indmaxerror[2]]).")
+		println("Observation: $(datamatrix[indmaxerror...])")
+		println("Prediction: $(predictions[indmaxerror...])")
+		println("Error: $(errors[indmaxerror...])")
+		println("Relative error: $(relerrors[indmaxerror...])")
+		display([["Wells"; uniquespecies]'; wellnameorder[indmaxerror[1]] relerrors[indmaxerror[1], :]]')
+
+		info("Max/min Species in Buckets per species:")
 		maxs1 = maximum(buckets[numbuckets], 1)
 		mins1 = minimum(buckets[numbuckets], 1)
 		display([uniquespecies[dataindex] maxs1' mins1'])
-		info("Max/min Species in Buckets:")
+		info("Max/min Species in Buckets per buckets:")
 		maxs2 = maximum(buckets[numbuckets], 2)
 		mins2 = minimum(buckets[numbuckets], 2)
-		display([maxs2' mins2'])
+		display([maxs2 mins2])
 		info("Mixers:")
 		display([uniquewells mixers[numbuckets]])
 		info("Buckets:")
@@ -280,25 +305,81 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		end
 		nbuckets = (buckets[numbuckets] .- mins1) ./ (maxs1 - mins1)
 		display([uniquespecies[dataindex] nbuckets'])
-		info("Sorted buckets normalized by overall species dominance:")
-		sbuckets = nbuckets[source_index,:]
-		display([uniquespecies[dataindex] sbuckets'])
-		info("Sorted buckets normalized by species dominance within each bucket:")
+		info("Sorted buckets normalized by (max/min species) the overall species dominance:")
+		s1buckets = nbuckets[source_index,:]
+		display([uniquespecies[dataindex] s1buckets'])
+		info("Sorted buckets normalized by (max/min buckets) species dominance within each bucket:")
 		n2buckets = (buckets[numbuckets] .- mins2) ./ (maxs2 - mins2)
 		s2buckets = n2buckets[source_index,:]
 		display([uniquespecies[dataindex] s2buckets'])
-		info("Sorted buckets:")
-		display([uniquespecies[dataindex] buckets[numbuckets][source_index,:]'])
-		# sbuckets[sbuckets.<1e-6] = 1e-6
-		gbucket = Gadfly.spy(sbuckets', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
+		bucketimpact = Array(Float64, numbuckets, numconstituents)
+		for s in 1:numconstituents
+			for i = 1:numbuckets
+				bucketimpact[i, s] = sum(abs((spredictions[i][:, s])))
+			end
+		end
+		bucketimpactwells = Array(Float64, numbuckets, numwells)
+		for w in 1:numwells
+			for i = 1:numbuckets
+				bucketimpactwells[i, w] = sum(abs((spredictions[i][w, :])))
+			end
+		end
+		info("Sorted buckets to capture the overall impact on the species concentrations:")
+		display([uniquespecies[dataindex] bucketimpact[source_index, dataindex]'])
+		info("Max/min Species in model predictions for each bucket:")
+		maxm = maximum(bucketimpact, 1)
+		minm = minimum(bucketimpact, 1)
+		display([uniquespecies[dataindex] maxm' minm'])
+		for i=1:length(maxm)
+			if maxm[i] == minm[i]
+				minm[i] = 0
+			end
+		end
+		maxiw = maximum(bucketimpactwells, 1)
+		miniw = minimum(bucketimpactwells, 1)
+		display([wellnameorder maxiw' miniw'])
+		for i=1:length(maxm)
+			if maxiw[i] == miniw[i]
+				miniw[i] = 0
+			end
+		end
+		poop
+		bucketimpactwells[source_index, wellorder] = (bucketimpactwells .- miniw) ./ (maxiw - miniw)
+		gmixers = Gadfly.spy(bucketimpactwells', Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
+					Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"),
+					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
+					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
+		# filename, format = Mads.setimagefileformat(filename, format)
+		filename = "results/$(casestring)-$numbuckets-$retries-bucketimpactwells.svg"
+		Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
+		filename = "results/$(casestring)-$numbuckets-$retries-bucketimpactwells.png"
+		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
+
+		info("Sorted buckets normalized to capture the overall impact on the species concentrations::")
+		bucketimpact[source_index, dataindex] = (bucketimpact .- minm) ./ (maxm - minm)
+		display([uniquespecies[dataindex] bucketimpact'])
+
+		gbucket = Gadfly.spy(bucketimpact', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
 					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"),
 					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
 					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
 		# filename, format = Mads.setimagefileformat(filename, format)
-		filename = "results/$(casestring)-$numbuckets-$retries-buckets.svg"
+		filename = "results/$(casestring)-$numbuckets-$retries-bucketimpact.svg"
 		Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
-		filename = "results/$(casestring)-$numbuckets-$retries-buckets.png"
+		filename = "results/$(casestring)-$numbuckets-$retries-bucketimpact.png"
 		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
+
+		# s1buckets[s1buckets.<1e-6] = 1e-6
+		gbucket = Gadfly.spy(s1buckets', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
+					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"),
+					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
+					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
+		# filename, format = Mads.setimagefileformat(filename, format)
+		filename = "results/$(casestring)-$numbuckets-$retries-buckets1.svg"
+		Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
+		filename = "results/$(casestring)-$numbuckets-$retries-buckets1.png"
+		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
+
 		gbucket = Gadfly.spy(s2buckets', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
 					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"),
 					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
@@ -309,11 +390,15 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		filename = "results/$(casestring)-$numbuckets-$retries-buckets2.png"
 		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
 
+		info("Sorted buckets:")
+		display([uniquespecies[dataindex] buckets[numbuckets][source_index,:]'])
+
 		info("Sorted mixers:")
 		smixers = mixers[numbuckets][wellorder, source_index]
 		smixers[smixers .< 0] = 0
 		smixers[smixers .> 1] = 1
 		display([wellnameorder smixers])
+
 		gmixers = Gadfly.spy(smixers, Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
 					Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"),
 					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
@@ -421,10 +506,10 @@ end
 function loaddata(casename::AbstractString, keyword::AbstractString="")
 	global case = casename
 	global casekeyword = keyword
-	global mixers = Array(Array{Float64, 2}, maxbuckets)
-	global buckets = Array(Array{Float64, 2}, maxbuckets)
-	global fitquality = Array(Float64, maxbuckets)
-	global robustness = Array(Float64, maxbuckets)
+	global mixers = Array(Array{Float64, 2}, bucketimpact)
+	global buckets = Array(Array{Float64, 2}, bucketimpact)
+	global fitquality = Array(Float64, bucketimpact)
+	global robustness = Array(Float64, bucketimpact)
 	global ratioindex = Int[]
 	global deltaindex = Int[]
 	global deltadependency = Int[]
@@ -518,10 +603,10 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	end
 	global casekeyword = casestring
 	global case = "cr-$probstamp"
-	global mixers = Array(Array{Float64, 2}, maxbuckets)
-	global buckets = Array(Array{Float64, 2}, maxbuckets)
-	global fitquality = Array(Float64, maxbuckets)
-	global robustness = Array(Float64, maxbuckets)
+	global mixers = Array(Array{Float64, 2}, bucketimpact)
+	global buckets = Array(Array{Float64, 2}, bucketimpact)
+	global fitquality = Array(Float64, bucketimpact)
+	global robustness = Array(Float64, bucketimpact)
 	global ratioindex = Int[]
 	filename = "data/cr-species.jld"
 	if isfile(filename)
@@ -714,7 +799,7 @@ end
 """
 Perform rMF analyses
 """
-function execute(range=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtures::Bool=true, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, matchwaterdeltas::Bool=false, quiet::Bool=true,clusterweights::Bool=true)
+function execute(range=1:bucketimpact; retries::Int=10, mixmatch::Bool=true, mixtures::Bool=true, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, matchwaterdeltas::Bool=false, quiet::Bool=true,clusterweights::Bool=true)
 	if sizeof(datamatrix) == 0
 		warn("Execute `rMF.loaddata()` first!")
 		return
