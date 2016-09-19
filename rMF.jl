@@ -162,12 +162,15 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 		@assert numwells == length(wellnameorder)
 		@assert numconstituents == length(uniquespecies)
 
+		orderedbuckets = similar(buckets[numbuckets])
 		spredictions = Array(Array{Float64, 2}, numbuckets)
 		if length(deltaindex) > 0
 			numdeltas = length(deltaindex)
 			numconc = numconstituents - numdeltas
 			H_conc = buckets[numbuckets][:,1:numconc]
 			H_deltas = buckets[numbuckets][:,numconc+1:end]
+			orderedbuckets[:, concindex] = H_conc
+			orderedbuckets[:, deltaindex] = H_deltas
 			predictions = similar(datamatrix)
 			predictions[:, concindex] = mixers[numbuckets] * H_conc
 			predictions[:, deltaindex] = MixMatch.computedeltas(mixers[numbuckets], H_conc, H_deltas, indexin(deltadependency, concindex))
@@ -182,6 +185,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 			@Base.Test.test_approx_eq_eps maximum(abs(predictions .- tpredictions)) 0 1e-3
 		else
 			predictions = mixers[numbuckets] * buckets[numbuckets]
+			orderedbuckets = buckets[numbuckets]
 			for i = 1:numbuckets
 				spredictions[i] = similar(datamatrix)
 				spredictions[i] = mixers[numbuckets][:,i] * H_conc[i,:]
@@ -281,17 +285,17 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 		display([["Wells"; uniquespecies]'; wellnameorder[indmaxerror[1]] relerrors[indmaxerror[1], :]]')
 
 		info("Max/min Species in Buckets per species:")
-		maxs1 = maximum(buckets[numbuckets], 1)
-		mins1 = minimum(buckets[numbuckets], 1)
+		maxs1 = maximum(orderedbuckets, 1)
+		mins1 = minimum(orderedbuckets, 1)
 		display([uniquespecies[dataindex] maxs1' mins1'])
 		info("Max/min Species in Buckets per buckets:")
-		maxs2 = maximum(buckets[numbuckets], 2)
-		mins2 = minimum(buckets[numbuckets], 2)
+		maxs2 = maximum(orderedbuckets, 2)
+		mins2 = minimum(orderedbuckets, 2)
 		display([maxs2 mins2])
 		info("Mixers:")
 		display([uniquewells mixers[numbuckets]])
 		info("Buckets:")
-		display([uniquespecies[dataindex] buckets[numbuckets]'])
+		display([uniquespecies[dataindex] orderedbuckets'])
 		info("Normalized buckets:")
 		for i=1:length(maxs1)
 			if maxs1[i] == mins1[i]
@@ -303,24 +307,26 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 				mins2[i] = 0
 			end
 		end
-		nbuckets = (buckets[numbuckets] .- mins1) ./ (maxs1 - mins1)
+		nbuckets = (orderedbuckets .- mins1) ./ (maxs1 - mins1)
 		display([uniquespecies[dataindex] nbuckets'])
 		info("Sorted buckets normalized by (max/min species) the overall species dominance:")
 		s1buckets = nbuckets[source_index,:]
 		display([uniquespecies[dataindex] s1buckets'])
 		info("Sorted buckets normalized by (max/min buckets) species dominance within each bucket:")
-		n2buckets = (buckets[numbuckets] .- mins2) ./ (maxs2 - mins2)
+		n2buckets = (orderedbuckets .- mins2) ./ (maxs2 - mins2)
 		s2buckets = n2buckets[source_index,:]
 		display([uniquespecies[dataindex] s2buckets'])
 		bucketimpact = Array(Float64, numbuckets, numconstituents)
 		for s in 1:numconstituents
 			for i = 1:numbuckets
+				# bucketimpact[i, s] = sum(abs((spredictions[i][:, s])./predictions[:,s]))
 				bucketimpact[i, s] = sum(abs((spredictions[i][:, s])))
 			end
 		end
 		bucketimpactwells = Array(Float64, numbuckets, numwells)
 		for w in 1:numwells
 			for i = 1:numbuckets
+				# bucketimpactwells[i, w] = sum(abs((spredictions[i][w, :])./predictions[w,:]))
 				bucketimpactwells[i, w] = sum(abs((spredictions[i][w, :])))
 			end
 		end
@@ -355,7 +361,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 		filename = "results/$(casestring)-$numbuckets-$retries-bucketimpactwells.png"
 		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
 
-		info("Sorted buckets normalized to capture the overall impact on the species concentrations::")
+		info("Sorted buckets normalized to capture the overall impact on the species concentrations:")
 		bucketimpact[source_index, dataindex] = (bucketimpact .- minm) ./ (maxm - minm)
 		display([uniquespecies[dataindex] bucketimpact'])
 
@@ -391,7 +397,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
 
 		info("Sorted buckets:")
-		display([uniquespecies[dataindex] buckets[numbuckets][source_index,:]'])
+		display([uniquespecies[dataindex] orderedbuckets[source_index,:]'])
 
 		info("Sorted mixers:")
 		smixers = mixers[numbuckets][wellorder, source_index]
