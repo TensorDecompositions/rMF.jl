@@ -7,6 +7,7 @@ import DataStructures
 import SpatialAnalysis
 import PyCall
 import Gadfly
+import Compose
 import Colors
 import PyPlot
 
@@ -163,7 +164,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 		@assert numconstituents == length(uniquespecies)
 
 		orderedbuckets = similar(buckets[numbuckets])
-		spredictions = Array(Array{Float64, 2}, numbuckets)
+		global spredictions = Array(Array{Float64, 2}, numbuckets)
 		if length(deltaindex) > 0
 			numdeltas = length(deltaindex)
 			numconc = numconstituents - numdeltas
@@ -171,7 +172,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 			H_deltas = buckets[numbuckets][:,numconc+1:end]
 			orderedbuckets[:, concindex] = H_conc
 			orderedbuckets[:, deltaindex] = H_deltas
-			predictions = similar(datamatrix)
+			global predictions = similar(datamatrix)
 			predictions[:, concindex] = mixers[numbuckets] * H_conc
 			predictions[:, deltaindex] = MixMatch.computedeltas(mixers[numbuckets], H_conc, H_deltas, indexin(deltadependency, concindex))
 			tpredictions = zeros(size(datamatrix))
@@ -257,6 +258,29 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 			f = open("results/$(casestring)-$numbuckets-$retries-bucket-$i-predictions.dat", "w")
 			writedlm(f, [["Wells"; uniquespecies]'; wellnameorder spredictions[source_index[i]][wellorder, :]]')
 		end
+
+		MArows = 5
+		MAcols = Int(ceil(numwells/5))
+		MA = Array(Compose.Context, (MArows, MAcols))
+		i = 1
+		for w in wellorder
+			b = abs(hcat(map(i->collect(spredictions[i][w,:]), 1:numbuckets)...)) ./ abs(predictions[w, :]')
+			b = b ./ maximum(b, 2)
+			MA[i] = Gadfly.render(Gadfly.spy(b[:,source_index], Gadfly.Guide.title(wellnameorder[i]), Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
+					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
+					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
+					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1)))
+			i += 1
+		end
+		for w in numwells+1:MArows*MAcols
+			MA[w] = Compose.context()
+		end
+		gs = Gadfly.gridstack(MA)
+		# filename, format = Mads.setimagefileformat(filename, format)
+		filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.svg"
+		Gadfly.draw(Gadfly.SVG(filename, MArows * 3Gadfly.inch, MAcols * 6Gadfly.inch), gs)
+		filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.png"
+		Gadfly.draw(Gadfly.PNG(filename, MArows * 3Gadfly.inch, MAcols * 6Gadfly.inch), gs)
 
 		info("Match errors:")
 		display([["Wells"; uniquespecies]'; wellnameorder errors[wellorder, :]]')
@@ -352,7 +376,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 		poop
 		bucketimpactwells[source_index, wellorder] = (bucketimpactwells .- miniw) ./ (maxiw - miniw)
 		gmixers = Gadfly.spy(bucketimpactwells', Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
-					Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"),
+					Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
 					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
 					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
 		# filename, format = Mads.setimagefileformat(filename, format)
@@ -366,7 +390,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 		display([uniquespecies[dataindex] bucketimpact'])
 
 		gbucket = Gadfly.spy(bucketimpact', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
-					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"),
+					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
 					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
 					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
 		# filename, format = Mads.setimagefileformat(filename, format)
@@ -377,7 +401,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 
 		# s1buckets[s1buckets.<1e-6] = 1e-6
 		gbucket = Gadfly.spy(s1buckets', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
-					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"),
+					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
 					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
 					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
 		# filename, format = Mads.setimagefileformat(filename, format)
@@ -387,7 +411,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
 
 		gbucket = Gadfly.spy(s2buckets', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
-					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"),
+					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
 					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
 					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
 		# filename, format = Mads.setimagefileformat(filename, format)
@@ -406,7 +430,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 		display([wellnameorder smixers])
 
 		gmixers = Gadfly.spy(smixers, Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
-					Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"),
+					Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
 					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
 					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
 		# filename, format = Mads.setimagefileformat(filename, format)
