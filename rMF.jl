@@ -10,8 +10,18 @@ import Gadfly
 import Compose
 import Colors
 import PyPlot
+import Compat
+import Compat.AbstractString
 
 @PyCall.pyimport matplotlib.patheffects as PathEffects
+
+function transposevector(a)
+	reshape(a, 1, length(a))
+end
+
+function transposematrix(a)
+	permutedims(a, (2, 1))
+end
 
 bucketimpact = 10
 case = ""
@@ -178,8 +188,13 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 			tpredictions = zeros(size(datamatrix))
 			for i = 1:numbuckets
 				spredictions[i] = similar(datamatrix)
-				spredictions[i][:, concindex] = mixers[numbuckets][:,i] * H_conc[i,:]
-				spredictions[i][:, deltaindex] = MixMatch.computedeltas(reshape(mixers[numbuckets][:,i], numwells, 1), H_conc[i,:], H_deltas[i,:], indexin(deltadependency, concindex), compute_contributions=true)
+				if VERSION < v"0.5"
+					spredictions[i][:, concindex] = mixers[numbuckets][:,i] * H_conc[i,:]
+					spredictions[i][:, deltaindex] = MixMatch.computedeltas(reshape(mixers[numbuckets][:,i], numwells, 1), H_conc[i,:], H_deltas[i,:], indexin(deltadependency, concindex), compute_contributions=true)
+				else
+					spredictions[i][:, concindex] = mixers[numbuckets][:,i] * H_conc[i,:]'
+					spredictions[i][:, deltaindex] = MixMatch.computedeltas(reshape(mixers[numbuckets][:,i], numwells, 1), H_conc[i,:]', H_deltas[i,:]', indexin(deltadependency, concindex), compute_contributions=true)
+				end
 				tpredictions = tpredictions + spredictions[i]
 			end
 			tpredictions[:, deltaindex] .*= predictions[:, deltaindex] ./ tpredictions[:, deltaindex]
@@ -240,23 +255,23 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 		end
 
 		f = open("results/$(casestring)-data.dat", "w")
-		writedlm(f, [["Wells"; uniquespecies]'; wellnameorder datamatrix[wellorder, :]]')
+		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder datamatrix[wellorder, :]]))
 		close(f)
 
 		source_weight = sum(mixers[numbuckets], 1)
-		source_index = sortperm(collect(source_weight), rev=true)
+		source_index = sortperm(vec(collect(source_weight)), rev=true)
 
 		info("Predictions:")
-		display([["Wells"; uniquespecies]'; wellnameorder predictions[wellorder, :]]')
+		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder predictions[wellorder, :]]))
 		f = open("results/$(casestring)-$numbuckets-$retries-predictions.dat", "w")
-		writedlm(f, [["Wells"; uniquespecies]'; wellnameorder predictions[wellorder, :]]')
+		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder predictions[wellorder, :]]))
 		close(f)
 		info("Predictions for each bucket:")
 		for i = 1:numbuckets
 			info("Predictions for bucket #$(i)")
-			display([["Wells"; uniquespecies]'; wellnameorder spredictions[source_index[i]][wellorder, :]]')
+			display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder spredictions[source_index[i]][wellorder, :]]))
 			f = open("results/$(casestring)-$numbuckets-$retries-bucket-$i-predictions.dat", "w")
-			writedlm(f, [["Wells"; uniquespecies]'; wellnameorder spredictions[source_index[i]][wellorder, :]]')
+			writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder spredictions[source_index[i]][wellorder, :]]))
 		end
 
 		MArows = 5
@@ -264,7 +279,11 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 		MA = Array(Compose.Context, (MArows, MAcols))
 		i = 1
 		for w in wellorder
-			b = abs(hcat(map(i->collect(spredictions[i][w,:]), 1:numbuckets)...)) ./ abs(predictions[w, :]')
+			if VERSION < v"0.5"
+				b = abs(hcat(map(i->collect(spredictions[i][w,:]), 1:numbuckets)...)) ./ abs(predictions[w, :]')
+			else
+				b = abs(hcat(map(i->collect(spredictions[i][w,:]), 1:numbuckets)...)) ./ abs(predictions[w, :])
+			end
 			b = b ./ maximum(b, 2)
 			MA[i] = Gadfly.render(Gadfly.spy(b[:,source_index], Gadfly.Guide.title(wellnameorder[i]), Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
 					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
@@ -283,9 +302,9 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 		Gadfly.draw(Gadfly.PNG(filename, MArows * 3Gadfly.inch, MAcols * 6Gadfly.inch), gs)
 
 		info("Match errors:")
-		display([["Wells"; uniquespecies]'; wellnameorder errors[wellorder, :]]')
+		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder errors[wellorder, :]]))
 		f = open("results/$(casestring)-$numbuckets-$retries-errors.dat", "w")
-		writedlm(f, [["Wells"; uniquespecies]'; wellnameorder errors[wellorder, :]]')
+		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder errors[wellorder, :]]))
 		close(f)
 		indmaxerror = ind2sub(size(errors), indmax(abs(errors)))
 		info("The largest absolute match error is for $(wellnameorder[indmaxerror[1]]) / $(uniquespecies[indmaxerror[2]]).")
@@ -293,12 +312,16 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 		println("Prediction: $(predictions[indmaxerror...])")
 		println("Error: $(errors[indmaxerror...])")
 		println("Relative error: $(relerrors[indmaxerror...])")
-		display([["Wells"; uniquespecies]'; wellnameorder[indmaxerror[1]] errors[indmaxerror[1], :]]')
+		if VERSION < v"0.5"
+			display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[indmaxerror[1]] errors[indmaxerror[1], :]]))
+		else
+			display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[indmaxerror[1]] errors[indmaxerror[1], :]']))
+		end
 
 		info("Relative match errors:")
-		display([["Wells"; uniquespecies]'; wellnameorder relerrors[wellorder, :]]')
+		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder relerrors[wellorder, :]]))
 		f = open("results/$(casestring)-$numbuckets-$retries-relerrors.dat", "w")
-		writedlm(f, [["Wells"; uniquespecies]'; wellnameorder relerrors[wellorder, :]]')
+		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder relerrors[wellorder, :]]))
 		close(f)
 		indmaxerror = ind2sub(size(relerrors), indmax(abs(relerrors)))
 		info("The largest absolute relative match error is for $(wellnameorder[indmaxerror[1]]) / $(uniquespecies[indmaxerror[2]]).")
@@ -306,7 +329,12 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 		println("Prediction: $(predictions[indmaxerror...])")
 		println("Error: $(errors[indmaxerror...])")
 		println("Relative error: $(relerrors[indmaxerror...])")
-		display([["Wells"; uniquespecies]'; wellnameorder[indmaxerror[1]] relerrors[indmaxerror[1], :]]')
+		if VERSION < v"0.5"
+			display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[indmaxerror[1]] relerrors[indmaxerror[1], :]]))
+		else
+			display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[indmaxerror[1]] relerrors[indmaxerror[1], :]']))
+
+		end
 
 		info("Max/min Species in Buckets per species:")
 		maxs1 = maximum(orderedbuckets, 1)
@@ -373,7 +401,6 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 				miniw[i] = 0
 			end
 		end
-		poop
 		bucketimpactwells[source_index, wellorder] = (bucketimpactwells .- miniw) ./ (maxiw - miniw)
 		gmixers = Gadfly.spy(bucketimpactwells', Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
 					Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
@@ -554,7 +581,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString="")
 		global concindex = setdiff(dataindex, deltaindex)
 		global wellcoord = [[0., 0.] [0., 100.]]
 		info("Concentration matrix:")
-		display([["Wells"; uniquespecies]'; uniquewells datamatrix])
+		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 		return
 	end
 	if casename == "test23delta2"
@@ -568,7 +595,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString="")
 		global concindex = setdiff(dataindex, deltaindex)
 		global wellcoord = [[0., 0.] [0., 100.]]
 		info("Concentration matrix:")
-		display([["Wells"; uniquespecies]'; uniquewells datamatrix])
+		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 		return
 	end
 	if casename == "test23ratio"
@@ -582,7 +609,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString="")
 		global dataindex = concindex
 		global wellcoord = [[0., 0.] [0., 100.]]
 		info("Concentration matrix:")
-		display([["Wells"; uniquespecies]'; uniquewells datamatrix])
+		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 		return
 	end
 	if casename == "test23"
@@ -594,7 +621,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString="")
 		global dataindex = concindex
 		global wellcoord = [[0., 0.] [0., 100.]]
 		info("Concentration matrix:")
-		display([["Wells"; uniquespecies]'; uniquewells datamatrix])
+		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 		return
 	end
 	rawdata = readcsv("data/" * casename * ".csv")
@@ -611,7 +638,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString="")
 	info("Wells ($(length(uniquewells)))")
 	display(uniquewells)
 	info("Concentration matrix:")
-	display([["Wells"; uniquespecies]'; uniquewells datamatrix])
+	display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 	return
 end
 
@@ -789,14 +816,14 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	info("Wells ($(length(uniquewells)))")
 	display(uniquewells)
 	info("Observations count:")
-	display([["Wells"; uniquespecies]'; uniquewells datacount])
+	display([transposevector(["Wells"; uniquespecies]); uniquewells datacount])
 	info("Observations per well:")
 	display([uniquewells sum(datacount,2)])
 	info("Observations per species:")
 	display([uniquespecies sum(datacount,1)'])
 	global datamatrix = convert(Array{Float32,2}, datamatrix ./ datacount) # gives NaN if there is no data, otherwise divides by the number of results
 	info("Concentration matrix:")
-	display([["Wells"; uniquespecies]'; uniquewells datamatrix])
+	display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 	global dataindex = collect(1:size(datamatrix, 2))
 	global concindex = setdiff(dataindex, deltaindex)
 	coord, coordheader = readdlm("data/cr-well-coord.dat", header=true)
@@ -841,9 +868,9 @@ function execute(range=1:bucketimpact; retries::Int=10, mixmatch::Bool=true, mix
 		nummixtures = size(concmatrix, 1)
 		numconstituents = size(concmatrix, 2)
 		info("Mixtures matrix:")
-		display([["Wells"; uniquespecies[concindex]]'; uniquewells concmatrix])
+		display([transposevector(["Wells"; uniquespecies[concindex]]); uniquewells concmatrix])
 		info("Ratio matrix:")
-		display([["Wells"; uniquespecies[ratioindex]]'; uniquewells ratiomatrix])
+		display([transposevector(["Wells"; uniquespecies[ratioindex]]); uniquewells ratiomatrix])
 		ratios = convert(Array{Float32, 3}, fill(NaN, nummixtures, numconstituents, numconstituents))
 		for i = 1:nummixtures
 			for j = 1:size(ratiocomponents, 2)
@@ -860,9 +887,9 @@ function execute(range=1:bucketimpact; retries::Int=10, mixmatch::Bool=true, mix
 		deltamatrix = datamatrix[:, deltaindex]
 		deltaindices = indexin(deltadependency, concindex)
 		info("Mixtures matrix:")
-		display([["Wells"; uniquespecies[concindex]]'; uniquewells concmatrix])
+		display([transposevector(["Wells"; uniquespecies[concindex]]); uniquewells concmatrix])
 		info("Delta matrix:")
-		display([["Wells"; uniquespecies[deltaindex]]'; uniquewells deltamatrix])
+		display([transposevector(["Wells"; uniquespecies[deltaindex]]); uniquewells deltamatrix])
 	else
 		deltaindices = deltadependency
 		deltamatrix = Array(Float32, 0, 0)
