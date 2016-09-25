@@ -188,13 +188,8 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 			tpredictions = zeros(size(datamatrix))
 			for i = 1:numbuckets
 				spredictions[i] = similar(datamatrix)
-				if VERSION < v"0.5"
-					spredictions[i][:, concindex] = mixers[numbuckets][:,i] * H_conc[i,:]
-					spredictions[i][:, deltaindex] = MixMatch.computedeltas(reshape(mixers[numbuckets][:,i], numwells, 1), H_conc[i,:], H_deltas[i,:], indexin(deltadependency, concindex), compute_contributions=true)
-				else
-					spredictions[i][:, concindex] = mixers[numbuckets][:,i] * H_conc[i,:]'
-					spredictions[i][:, deltaindex] = MixMatch.computedeltas(reshape(mixers[numbuckets][:,i], numwells, 1), H_conc[i,:]', H_deltas[i,:]', indexin(deltadependency, concindex), compute_contributions=true)
-				end
+				spredictions[i][:, concindex] = mixers[numbuckets][:,i:i] * H_conc[i:i,:]
+				spredictions[i][:, deltaindex] = MixMatch.computedeltas(reshape(mixers[numbuckets][:,i:i], numwells, 1), H_conc[i:i,:], H_deltas[i:i,:], indexin(deltadependency, concindex), compute_contributions=true)
 				tpredictions = tpredictions + spredictions[i]
 			end
 			tpredictions[:, deltaindex] .*= predictions[:, deltaindex] ./ tpredictions[:, deltaindex]
@@ -279,11 +274,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 		MA = Array(Compose.Context, (MArows, MAcols))
 		i = 1
 		for w in wellorder
-			if VERSION < v"0.5"
-				b = abs(hcat(map(i->collect(spredictions[i][w,:]), 1:numbuckets)...)) ./ abs(predictions[w, :]')
-			else
-				b = abs(hcat(map(i->collect(spredictions[i][w,:]), 1:numbuckets)...)) ./ abs(predictions[w, :])
-			end
+			b = abs(hcat(map(i->collect(spredictions[i][w,:]), 1:numbuckets)...)) ./ abs(predictions[w:w, :]')
 			b = b ./ maximum(b, 2)
 			MA[i] = Gadfly.render(Gadfly.spy(b[:,source_index], Gadfly.Guide.title(wellnameorder[i]), Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
 					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
@@ -312,12 +303,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 		println("Prediction: $(predictions[indmaxerror...])")
 		println("Error: $(errors[indmaxerror...])")
 		println("Relative error: $(relerrors[indmaxerror...])")
-		if VERSION < v"0.5"
-			display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[indmaxerror[1]] errors[indmaxerror[1], :]]))
-		else
-			display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[indmaxerror[1]] errors[indmaxerror[1], :]']))
-		end
-
+		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[indmaxerror[1]] errors[indmaxerror[1]:indmaxerror[1], :]]))
 		info("Relative match errors:")
 		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder relerrors[wellorder, :]]))
 		f = open("results/$(casestring)-$numbuckets-$retries-relerrors.dat", "w")
@@ -329,13 +315,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 		println("Prediction: $(predictions[indmaxerror...])")
 		println("Error: $(errors[indmaxerror...])")
 		println("Relative error: $(relerrors[indmaxerror...])")
-		if VERSION < v"0.5"
-			display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[indmaxerror[1]] relerrors[indmaxerror[1], :]]))
-		else
-			display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[indmaxerror[1]] relerrors[indmaxerror[1], :]']))
-
-		end
-
+		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[indmaxerror[1]] relerrors[indmaxerror[1]:indmaxerror[1], :]]))
 		info("Max/min Species in Buckets per species:")
 		maxs1 = maximum(orderedbuckets, 1)
 		mins1 = minimum(orderedbuckets, 1)
