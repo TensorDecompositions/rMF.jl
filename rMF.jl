@@ -145,29 +145,9 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 			error("Result file `$(filename)` is missing ...\nExecute `rMF.execute($numbuckets)` to get the results!")
 			continue
 		end
-
-		wells2i = Dict(zip(uniquewells, 1:length(uniquewells)))
-		if isfile("data/cr-well-order-WE.dat")
-			wellnameorder = readdlm("data/cr-well-order-WE.dat")
-			wellorder = zeros(Int, length(wellnameorder))
-			for i in 1:length(wellorder)
-				if haskey(wells2i, wellnameorder[i])
-					wellorder[i] = wells2i[wellnameorder[i]]
-				end
-			end
-			wellmissing = wellorder .== 0
-			indexmissing = find(wellmissing)
-			wellavailable = wellorder .!= 0
-			indexavailale = find(wellavailable)
-			if length(indexmissing) > 0
-				wellorder = 1:length(uniquewells)
-				wellnameorder = uniquewells
-			end
-		else
-			wellorder = 1:length(uniquewells)
-			wellnameorder = uniquewells		
-		end
 		
+		wellorder, wellnameorder = getwellorder()
+
 		numwells = size(datamatrix, 1)
 		numconstituents = size(datamatrix, 2)
 		@assert numwells == length(wellnameorder)
@@ -324,10 +304,16 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 		maxs2 = maximum(orderedbuckets, 2)
 		mins2 = minimum(orderedbuckets, 2)
 		display([maxs2 mins2])
+		
 		info("Mixers:")
 		display([uniquewells mixers[numbuckets]])
+		
 		info("Buckets:")
-		display([uniquespecies[dataindex] orderedbuckets'])
+		display([uniquespecies[dataindex] orderedbuckets[source_index,:]'])
+		f = open("results/$(casestring)-$numbuckets-$retries-buckets.dat", "w")
+		writedlm(f, [uniquespecies[dataindex] orderedbuckets[source_index,:]'])
+		close(f)
+
 		info("Normalized buckets:")
 		for i=1:length(maxs1)
 			if maxs1[i] == mins1[i]
@@ -340,10 +326,12 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 			end
 		end
 		nbuckets = (orderedbuckets .- mins1) ./ (maxs1 - mins1)
-		display([uniquespecies[dataindex] nbuckets'])
+		display([uniquespecies[dataindex] nbuckets[source_index,:]'])
+		
 		info("Sorted buckets normalized by (max/min species) the overall species dominance:")
 		s1buckets = nbuckets[source_index,:]
 		display([uniquespecies[dataindex] s1buckets'])
+		
 		info("Sorted buckets normalized by (max/min buckets) species dominance within each bucket:")
 		n2buckets = (orderedbuckets .- mins2) ./ (maxs2 - mins2)
 		s2buckets = n2buckets[source_index,:]
@@ -362,8 +350,10 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 				bucketimpactwells[i, w] = sum(abs((spredictions[i][w, :])))
 			end
 		end
+		
 		info("Sorted buckets to capture the overall impact on the species concentrations:")
 		display([uniquespecies[dataindex] bucketimpact[source_index, dataindex]'])
+		
 		info("Max/min Species in model predictions for each bucket:")
 		maxm = maximum(bucketimpact, 1)
 		minm = minimum(bucketimpact, 1)
@@ -622,6 +612,50 @@ function loaddata(casename::AbstractString, keyword::AbstractString="")
 	return
 end
 
+function getwellorder()
+	wells2i = Dict(zip(uniquewells, 1:length(uniquewells)))
+	if isfile("data/cr-well-order-WE.dat")
+		wellnameorder = readdlm("data/cr-well-order-WE.dat")
+		wellorder = zeros(Int, length(wellnameorder))
+		for i in 1:length(wellorder)
+			if haskey(wells2i, wellnameorder[i])
+				wellorder[i] = wells2i[wellnameorder[i]]
+			end
+		end
+		wellmissing = wellorder .== 0
+		indexmissing = find(wellmissing)
+		wellavailable = wellorder .!= 0
+		indexavailale = find(wellavailable)
+		wellorder = wellorder[indexavailale]
+		wellnameorder = wellnameorder[indexavailale]
+	else
+		warn("data/cr-well-order-WE.dat is missing!")
+		wellorder = 1:length(uniquewells)
+		wellnameorder = uniquewells
+	end
+	@show wellorder
+	return wellorder, wellnameorder
+end
+
+function displayconc(name::String)
+	wellorder, wellnameorder = getwellorder()
+	if name == ""
+		display([transposevector(["Wells"; uniquespecies]); wellnameorder datamatrix[wellorder,:]])
+	else
+		i = findin(uniquespecies, [name])
+		if length(i) > 0
+			j = i[1]
+			display([transposevector(["Wells"; uniquespecies[j]]); wellnameorder datamatrix[wellorder,j]])
+		else
+			i = findin(wellnameorder, [name])
+			if length(i) > 0
+				j = i[1]
+				display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[j] datamatrix[wellorder[j]:wellorder[j],:]]))
+			end
+		end
+	end
+end
+
 function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsset::AbstractString="", speciesset::AbstractString="")
 	casestring = keyword
 	if wellsset != ""
@@ -664,8 +698,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 				if length(sd) > 0
 					warn("The following species will be removed!")
 					display(sd)
-					ind = indexin(uniquespecies, ss)
-					ind = ind[ind .> 0]
+					ind = findin(uniquespecies, ss)
 					global uniquespecies = uniquespecies[ind]
 					global uniquespecies_long = uniquespecies_long[ind]
 				end
@@ -782,7 +815,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	wells2i = Dict(zip(uniquewells, 1:length(uniquewells)))
 	name2j = Dict(zip(uniquespecies, 1:length(uniquespecies)))
 	datacount = zeros(Int, length(uniquewells), length(uniquespecies))
-	datamatrix = zeros(Float32, length(uniquewells), length(uniquespecies))
+	global datamatrix = zeros(Float32, length(uniquewells), length(uniquespecies))
 	for index = 1:length(wells)
 		i = wells2i[wells[index]]
 		if haskey(name2j, names[index])
@@ -791,19 +824,20 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 			datamatrix[i, j] += concs[index]
 		end
 	end
+	wellorder, wellnameorder = getwellorder()
 	info("Species ($(length(uniquespecies)))")
 	display(uniquespecies)
-	info("Wells ($(length(uniquewells)))")
-	display(uniquewells)
+	info("Wells ($(length(wellnameorder)))")
+	display(wellnameorder)
 	info("Observations count:")
-	display([transposevector(["Wells"; uniquespecies]); uniquewells datacount])
+	display([transposevector(["Wells"; uniquespecies]); wellnameorder datacount[wellorder,:]])
 	info("Observations per well:")
-	display([uniquewells sum(datacount,2)])
+	display([wellnameorder sum(datacount,2)[wellorder]])
 	info("Observations per species:")
 	display([uniquespecies sum(datacount,1)'])
 	global datamatrix = convert(Array{Float32,2}, datamatrix ./ datacount) # gives NaN if there is no data, otherwise divides by the number of results
 	info("Concentration matrix:")
-	display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
+	display([transposevector(["Wells"; uniquespecies]); wellnameorder datamatrix[wellorder,:]])
 	global dataindex = collect(1:size(datamatrix, 2))
 	global concindex = setdiff(dataindex, deltaindex)
 	coord, coordheader = readdlm("data/cr-well-coord.dat", header=true)
@@ -817,20 +851,31 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 			wellcoord[index,2] = coord[i,3]
 		end
 	end
+
 	info("Check species in the dictionary ...")
+	not_ok = false
 	uniquelongnames = unique(longnames)
 	for i in 1:length(uniquelongnames)
 		if !haskey(dict_species, uniquelongnames[i])
+			not_ok = true
 			warn("Species name $(uniquelongnames[i]) in the data set is not defined in the dictionary!")
 		end
 	end
+	if !not_ok
+		println("ok")
+	end
+	
 	info("Check species in the data set ...")
+	not_ok = false
 	for i in 1:length(uniquespecies_long)
 		if indexin([uniquespecies_long[i]], uniquelongnames)[1] == 0
+			not_ok = true
 			warn("Species name $(uniquespecies_long[i]) defined in the dictionary is missing in the data set!")
 		end
 	end
-	return
+	if !not_ok
+		println("ok")
+	end
 end
 
 """
