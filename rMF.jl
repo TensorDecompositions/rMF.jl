@@ -633,11 +633,10 @@ function getwellorder()
 		wellorder = 1:length(uniquewells)
 		wellnameorder = uniquewells
 	end
-	@show wellorder
 	return wellorder, wellnameorder
 end
 
-function displayconc(name::String)
+function displayconc(name::AbstractString)
 	wellorder, wellnameorder = getwellorder()
 	if name == ""
 		display([transposevector(["Wells"; uniquespecies]); wellnameorder datamatrix[wellorder,:]])
