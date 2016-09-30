@@ -23,13 +23,13 @@ function transposematrix(a)
 	permutedims(a, (2, 1))
 end
 
-bucketimpact = 10
+maxbuckets = 10
 case = ""
 casekeyword = ""
-mixers = Array(Array{Float64, 2}, bucketimpact)
-buckets = Array(Array{Float64, 2}, bucketimpact)
-fitquality = Array(Float64, bucketimpact)
-robustness = Array(Float64, bucketimpact)
+mixers = Array(Array{Float64, 2}, maxbuckets)
+buckets = Array(Array{Float64, 2}, maxbuckets)
+fitquality = Array(Float64, maxbuckets)
+robustness = Array(Float64, maxbuckets)
 deltadependency = Int[]
 dict_species = Dict()
 uniquewells = []
@@ -92,7 +92,7 @@ info("Use `rMF.execute(5, retries=50)` to compute the results for the 5 bucket c
 info("Use `rMF.getresults(5, retries=50)` to get the results for the 5 bucket case.")
 info("Use `rMF.getresults(5:6, retries=50; brief=true)` to see the results for bucket cases 5 to 8.")
 
-function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::AbstractString=""; retries=10, brief::Bool=false)
+function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::AbstractString=""; retries=10, brief::Bool=false)
 	if keyword != ""
 		if case != "" && !contains(keyword, case)
 			casestring = case * "-" * keyword
@@ -249,6 +249,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 			writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder spredictions[source_index[i]][wellorder, :]]))
 		end
 
+
 		MArows = 5
 		MAcols = Int(ceil(numwells/5))
 		MA = Array(Compose.Context, (MArows, MAcols))
@@ -266,7 +267,6 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 			MA[w] = Compose.context()
 		end
 		gs = Gadfly.gridstack(MA)
-		# filename, format = Mads.setimagefileformat(filename, format)
 		filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.svg"
 		Gadfly.draw(Gadfly.SVG(filename, MArows * 3Gadfly.inch, MAcols * 6Gadfly.inch), gs)
 		filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.png"
@@ -527,16 +527,17 @@ function getresults(range::Union{UnitRange{Int},Int}=1:bucketimpact, keyword::Ab
 				PyPlot.close()
 			end
 		end
+	=#
 	end
 end
 
 function loaddata(casename::AbstractString, keyword::AbstractString="")
 	global case = casename
 	global casekeyword = keyword
-	global mixers = Array(Array{Float64, 2}, bucketimpact)
-	global buckets = Array(Array{Float64, 2}, bucketimpact)
-	global fitquality = Array(Float64, bucketimpact)
-	global robustness = Array(Float64, bucketimpact)
+	global mixers = Array(Array{Float64, 2}, maxbuckets)
+	global buckets = Array(Array{Float64, 2}, maxbuckets)
+	global fitquality = Array(Float64, maxbuckets)
+	global robustness = Array(Float64, maxbuckets)
 	global ratioindex = Int[]
 	global deltaindex = Int[]
 	global deltadependency = Int[]
@@ -673,10 +674,10 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	end
 	global casekeyword = casestring
 	global case = "cr-$probstamp"
-	global mixers = Array(Array{Float64, 2}, bucketimpact)
-	global buckets = Array(Array{Float64, 2}, bucketimpact)
-	global fitquality = Array(Float64, bucketimpact)
-	global robustness = Array(Float64, bucketimpact)
+	global mixers = Array(Array{Float64, 2}, maxbuckets)
+	global buckets = Array(Array{Float64, 2}, maxbuckets)
+	global fitquality = Array(Float64, maxbuckets)
+	global robustness = Array(Float64, maxbuckets)
 	global ratioindex = Int[]
 	filename = "data/cr-species.jld"
 	if isfile(filename)
@@ -880,7 +881,7 @@ end
 """
 Perform rMF analyses
 """
-function execute(range=1:bucketimpact; retries::Int=10, mixmatch::Bool=true, mixtures::Bool=true, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, matchwaterdeltas::Bool=false, quiet::Bool=true,clusterweights::Bool=true)
+function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtures::Bool=true, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, matchwaterdeltas::Bool=false, quiet::Bool=true,clusterweights::Bool=true)
 	if sizeof(datamatrix) == 0
 		warn("Execute `rMF.loaddata()` first!")
 		return
