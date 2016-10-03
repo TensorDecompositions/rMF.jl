@@ -216,13 +216,13 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		of = sum(errors.^2)
 		errors[indexnan] = NaN
 		relerrors = errors ./ d
-
 		relerrors[indexnan] = NaN
+
 		if brief
-			println("Buckets = $numbuckets; Best objective function = $(fitquality[numbuckets]) (check = $(of)); Robustness = $(robustness[numbuckets])")
+			println("Buckets = $numbuckets; Best objective function = $(fitquality[numbuckets]) (check = $(of); regularization penalty = $(sum(log(1.+abs(orderedbuckets)).^2)/numbuckets)); Robustness = $(robustness[numbuckets])")
 			continue
 		else
-			info("Fit quality: $(fitquality[numbuckets]) (check = $(of))")
+			info("Fit quality: $(fitquality[numbuckets]) (check = $(of)) (regularization penalty = $(sum(log(1.+abs(orderedbuckets)).^2)/numbuckets))")
 			if of - fitquality[numbuckets] > 1e-1
 				warn("Objective function test fails!")
 			end
@@ -248,7 +248,6 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			f = open("results/$(casestring)-$numbuckets-$retries-bucket-$i-predictions.dat", "w")
 			writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder spredictions[source_index[i]][wellorder, :]]))
 		end
-
 
 		MArows = 5
 		MAcols = Int(ceil(numwells/5))
@@ -366,7 +365,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		maxiw = maximum(bucketimpactwells, 1)
 		miniw = minimum(bucketimpactwells, 1)
 		display([wellnameorder maxiw' miniw'])
-		for i=1:length(maxm)
+		for i=1:length(maxiw)
 			if maxiw[i] == miniw[i]
 				miniw[i] = 0
 			end
@@ -527,7 +526,6 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 				PyPlot.close()
 			end
 		end
-	=#
 	end
 end
 
@@ -631,6 +629,10 @@ function getwellorder()
 		wellnameorder = wellnameorder[indexavailale]
 	else
 		warn("data/cr-well-order-WE.dat is missing!")
+		wellorder = 1:length(uniquewells)
+		wellnameorder = uniquewells
+	end
+	if length(wellorder) == 0
 		wellorder = 1:length(uniquewells)
 		wellnameorder = uniquewells
 	end
@@ -782,8 +784,8 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 			wu = unique(wells)
 			sd = setdiff(ws, wu)
 			if length(sd) > 0
-				error("There are wells in $filename missing!")
 				display(sd)
+				error("There are wells in $filename missing!")
 				return
 			end
 			sd = setdiff(wu, ws)
@@ -838,6 +840,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	global datamatrix = convert(Array{Float32,2}, datamatrix ./ datacount) # gives NaN if there is no data, otherwise divides by the number of results
 	info("Concentration matrix:")
 	display([transposevector(["Wells"; uniquespecies]); wellnameorder datamatrix[wellorder,:]])
+	info("Potential regularization penalty = $(sum(log(1.+abs(maximum(abs(datamatrix), 1))).^2))")
 	global dataindex = collect(1:size(datamatrix, 2))
 	global concindex = setdiff(dataindex, deltaindex)
 	coord, coordheader = readdlm("data/cr-well-coord.dat", header=true)
@@ -935,7 +938,7 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		else
 			filename = "results/$case-$casekeyword-$numbuckets-$retries.jld"
 		end
-		JLD.save(filename, "wells", uniquewells, "species", uniquespecies, "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets])
+		JLD.save(filename, "wells", uniquewells, "species", uniquespecies, "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets], "regularizationweight", regularizationweight)
 	end
 	return
 end
