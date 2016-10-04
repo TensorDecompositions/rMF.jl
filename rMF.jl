@@ -179,7 +179,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			orderedbuckets = buckets[numbuckets]
 			for i = 1:numbuckets
 				spredictions[i] = similar(datamatrix)
-				spredictions[i] = mixers[numbuckets][:,i] * H_conc[i,:]
+				spredictions[i] = mixers[numbuckets][:,i:i] * buckets[numbuckets][i:i,:]
 			end
 		end
 		if length(ratioindex) > 0
@@ -258,7 +258,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			b = b ./ maximum(b, 2)
 			MA[i] = Gadfly.render(Gadfly.spy(b[:,source_index], Gadfly.Guide.title(wellnameorder[i]), Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
 					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
-					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
+					Gadfly.Theme(default_point_size=18Gadfly.pt, major_label_font_size=12Gadfly.pt, minor_label_font_size=10Gadfly.pt, key_title_font_size=12Gadfly.pt, key_label_font_size=10Gadfly.pt),
 					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1)))
 			i += 1
 		end
@@ -267,9 +267,9 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		end
 		gs = Gadfly.gridstack(MA)
 		filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.svg"
-		Gadfly.draw(Gadfly.SVG(filename, MArows * 3Gadfly.inch, MAcols * 6Gadfly.inch), gs)
+		Gadfly.draw(Gadfly.SVG(filename, MArows * 2.5Gadfly.inch, MAcols * 1.5Gadfly.inch + numconstituents * 0.75Gadfly.inch), gs)
 		filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.png"
-		Gadfly.draw(Gadfly.PNG(filename, MArows * 3Gadfly.inch, MAcols * 6Gadfly.inch), gs)
+		Gadfly.draw(Gadfly.PNG(filename, MArows * 2.5Gadfly.inch, MAcols * 1.5Gadfly.inch + numconstituents * 0.75Gadfly.inch), gs)
 
 		info("Match errors:")
 		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder errors[wellorder, :]]))
@@ -327,11 +327,11 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		nbuckets = (orderedbuckets .- mins1) ./ (maxs1 - mins1)
 		display([uniquespecies[dataindex] nbuckets[source_index,:]'])
 		
-		info("Sorted buckets normalized by (max/min species) the overall species dominance:")
+		info("Ordered buckets normalized by (max/min species) the overall species dominance:")
 		s1buckets = nbuckets[source_index,:]
 		display([uniquespecies[dataindex] s1buckets'])
 		
-		info("Sorted buckets normalized by (max/min buckets) species dominance within each bucket:")
+		info("Ordered buckets normalized by (max/min buckets) species dominance within each bucket:")
 		n2buckets = (orderedbuckets .- mins2) ./ (maxs2 - mins2)
 		s2buckets = n2buckets[source_index,:]
 		display([uniquespecies[dataindex] s2buckets'])
@@ -350,7 +350,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			end
 		end
 		
-		info("Sorted buckets to capture the overall impact on the species concentrations:")
+		info("Ordered buckets to capture the overall impact on the species concentrations:")
 		display([uniquespecies[dataindex] bucketimpact[source_index, dataindex]'])
 		
 		info("Max/min Species in model predictions for each bucket:")
@@ -381,11 +381,11 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		filename = "results/$(casestring)-$numbuckets-$retries-bucketimpactwells.png"
 		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
 
-		info("Sorted buckets normalized to capture the overall impact on the species concentrations:")
+		info("Ordered buckets normalized to capture the overall impact on the species concentrations:")
 		bucketimpact[source_index, dataindex] = (bucketimpact .- minm) ./ (maxm - minm)
 		display([uniquespecies[dataindex] bucketimpact'])
 
-		gbucket = Gadfly.spy(bucketimpact', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
+		gbucket = Gadfly.spy(bucketimpact[source_index, dataindex]', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
 					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
 					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
 					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
@@ -416,10 +416,10 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		filename = "results/$(casestring)-$numbuckets-$retries-buckets2.png"
 		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
 
-		info("Sorted buckets:")
+		info("Ordered buckets:")
 		display([uniquespecies[dataindex] orderedbuckets[source_index,:]'])
 
-		info("Sorted mixers:")
+		info("Ordered mixers:")
 		smixers = mixers[numbuckets][wellorder, source_index]
 		smixers[smixers .< 0] = 0
 		smixers[smixers .> 1] = 1
