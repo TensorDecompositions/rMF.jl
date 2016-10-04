@@ -43,7 +43,7 @@ dict_species = DataStructures.OrderedDict{AbstractString,AbstractString}(
 	"Chloride"=>"Cl-",
 	"Chlorate"=>"ClO3",
 	"Perchlorate"=>"ClO4",
-	"Chlorine-36/Chlorine Ratio (e-15)"=>"δ36Cl",
+	"Chlorine-36/Chlorine Ratio (e-15)"=>"r36Cl",
 	"Tritium"=>"3H",
 	"Deuterium Ratio"=>"δ2H",
 	"Oxygen-18/Oxygen-16 Ratio"=>"δ18O",
@@ -53,7 +53,7 @@ dict_species = DataStructures.OrderedDict{AbstractString,AbstractString}(
 	"Sulfate"=>"SO4",
 	"Sulfur-34/Sulfur-32 Ratio (SO4)"=>"δ34S-SO4",
 	"Oxygen-18/Oxygen-16 Ratio from SO4"=>"δ18O-SO4",
-	"Iodine-129/Iodine Ratio (e-15)"=>"δI129",
+	"Iodine-129/Iodine Ratio (e-15)"=>"rI129",
 	"Fraction Modern Carbon (de-normalized)"=>"f14C",
 	"Dioxane[1,4-]"=>"Dioxane",
 	"Acetaminophen"=>"Acetam",
@@ -267,9 +267,9 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		end
 		gs = Gadfly.gridstack(MA)
 		filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.svg"
-		Gadfly.draw(Gadfly.SVG(filename, MArows * 2.5Gadfly.inch, MAcols * 1.5Gadfly.inch + numconstituents * 0.75Gadfly.inch), gs)
+		Gadfly.draw(Gadfly.SVG(filename, MArows * 2.5Gadfly.inch, MAcols * (1.5Gadfly.inch + numconstituents * 0.15Gadfly.inch)), gs)
 		filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.png"
-		Gadfly.draw(Gadfly.PNG(filename, MArows * 2.5Gadfly.inch, MAcols * 1.5Gadfly.inch + numconstituents * 0.75Gadfly.inch), gs)
+		Gadfly.draw(Gadfly.PNG(filename, MArows * 2.5Gadfly.inch, MAcols * (1.5Gadfly.inch + numconstituents * 0.15Gadfly.inch)), gs)
 
 		info("Match errors:")
 		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder errors[wellorder, :]]))
@@ -385,7 +385,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		bucketimpact[source_index, dataindex] = (bucketimpact .- minm) ./ (maxm - minm)
 		display([uniquespecies[dataindex] bucketimpact'])
 
-		gbucket = Gadfly.spy(bucketimpact[source_index, dataindex]', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
+		gbucket = Gadfly.spy(bucketimpact', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
 					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
 					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
 					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
