@@ -3,6 +3,7 @@ module rMF
 import MixMatch
 import NMFk
 import JLD
+import StatsBase
 import DataStructures
 import SpatialAnalysis
 import PyCall
@@ -10,8 +11,10 @@ import Gadfly
 import Compose
 import Colors
 import PyPlot
+import Images
 import Compat
 import Compat.AbstractString
+include(ENV["HOME"] * "/Julia/madsdisplay.jl")
 
 @PyCall.pyimport matplotlib.patheffects as PathEffects
 
@@ -241,6 +244,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		f = open("results/$(casestring)-$numbuckets-$retries-predictions.dat", "w")
 		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder predictions[wellorder, :]]))
 		close(f)
+		
 		info("Predictions for each bucket:")
 		for i = 1:numbuckets
 			info("Predictions for bucket #$(i)")
@@ -256,9 +260,12 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		for w in wellorder
 			b = abs(hcat(map(i->collect(spredictions[i][w,:]), 1:numbuckets)...)) ./ abs(predictions[w:w, :]')
 			b = b ./ maximum(b, 2)
-			MA[i] = Gadfly.render(Gadfly.spy(b[:,source_index], Gadfly.Guide.title(wellnameorder[i]), Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
-					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
-					Gadfly.Theme(default_point_size=18Gadfly.pt, major_label_font_size=12Gadfly.pt, minor_label_font_size=10Gadfly.pt, key_title_font_size=12Gadfly.pt, key_label_font_size=10Gadfly.pt),
+			MA[i] = Gadfly.render(Gadfly.spy(b[:,source_index], Gadfly.Guide.title(wellnameorder[i]),
+					Gadfly.Guide.xticks(orientation=:horizontal), Gadfly.Guide.yticks(orientation=:horizontal),
+					Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete(),
+					Gadfly.Guide.YLabel("", orientation=:vertical), Gadfly.Guide.XLabel("", orientation=:horizontal), 
+					Gadfly.Guide.colorkey(""),
+					Gadfly.Theme(key_position=:none, major_label_font_size=10Gadfly.pt, minor_label_font_size=8Gadfly.pt, key_title_font_size=10Gadfly.pt, key_label_font_size=8Gadfly.pt),
 					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1)))
 			i += 1
 		end
@@ -267,15 +274,52 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		end
 		gs = Gadfly.gridstack(MA)
 		filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.svg"
-		Gadfly.draw(Gadfly.SVG(filename, MArows * 2.5Gadfly.inch, MAcols * (1.5Gadfly.inch + numconstituents * 0.15Gadfly.inch)), gs)
+		Gadfly.draw(Gadfly.SVG(filename, MArows * (1.6Gadfly.inch + numbuckets * 0.1Gadfly.inch), MAcols * (1.6Gadfly.inch + numconstituents * 0.1Gadfly.inch)), gs)
 		filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.png"
-		Gadfly.draw(Gadfly.PNG(filename, MArows * 2.5Gadfly.inch, MAcols * (1.5Gadfly.inch + numconstituents * 0.15Gadfly.inch)), gs)
+		Gadfly.draw(Gadfly.PNG(filename, MArows * (1.6Gadfly.inch + numbuckets * 0.1Gadfly.inch), MAcols * (1.6Gadfly.inch + numconstituents * 0.1Gadfly.inch)), gs)
 
 		info("Match errors:")
 		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder errors[wellorder, :]]))
 		f = open("results/$(casestring)-$numbuckets-$retries-errors.dat", "w")
 		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder errors[wellorder, :]]))
 		close(f)
+		
+		info("Match error statistics:")
+		verrrors = vec(errors[!isnan(errors)])
+		numobservations = length(verrrors)
+		dof = numobservations - numbuckets
+		sml = dof + numobservations * (log(fitquality[numbuckets]/dof) / 2 + 1.837877)
+		aic = sml + 2 * numbuckets
+		println("AIC: $(aic)")
+		println("Mean: $(mean(verrrors))")
+		println("Variance: $(var(verrrors))")
+		println("Standard Deviation: $(std(verrrors))")
+		println("Maximum: $(maximum(verrrors))")
+		println("Minimum: $(minimum(verrrors))")
+		println("Skewness: $(StatsBase.skewness(verrrors))")
+		println("Kurtosis: $(StatsBase.kurtosis(verrrors))")
+		f = open("results/$(casestring)-$numbuckets-$retries-stats.dat", "w")
+		println(f, "Number of buckets: $(numbuckets)")
+		println(f, "* Degrees of freedom: $(dof)")
+		println(f, "* Fit quality: $(fitquality[numbuckets])")
+		println(f, "* Robustness: $(robustness[numbuckets])")
+		println(f, "* AIC: $(aic)")
+		println(f, "* Error stats: $(aic)")
+		println(f, "  - Mean: $(mean(verrrors))")
+		println(f, "  - Variance: $(var(verrrors))")
+		println(f, "  - Standard Deviation: $(std(verrrors))")
+		println(f, "  - Maximum: $(maximum(verrrors))")
+		println(f, "  - Minimum: $(minimum(verrrors))")
+		println(f, "  - Skewness: $(StatsBase.skewness(verrrors))")
+		println(f, "  - Kurtosis: $(StatsBase.kurtosis(verrrors))")
+		close(f)
+
+		info("Histogram of the estimation errors:")
+		g = Gadfly.plot(x=verrrors, Gadfly.Geom.histogram())
+		filename = "results/$(casestring)-$numbuckets-$retries-error_histogram.png"
+		Gadfly.draw(Gadfly.PNG(filename, 6Gadfly.inch, 4Gadfly.inch), g)
+		madsdisplay(filename)
+
 		indmaxerror = ind2sub(size(errors), indmax(abs(errors)))
 		info("The largest absolute match error is for $(wellnameorder[indmaxerror[1]]) / $(uniquespecies[indmaxerror[2]]).")
 		println("Observation: $(datamatrix[indmaxerror...])")
@@ -283,11 +327,13 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		println("Error: $(errors[indmaxerror...])")
 		println("Relative error: $(relerrors[indmaxerror...])")
 		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[indmaxerror[1]] errors[indmaxerror[1]:indmaxerror[1], :]]))
+		
 		info("Relative match errors:")
 		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder relerrors[wellorder, :]]))
 		f = open("results/$(casestring)-$numbuckets-$retries-relerrors.dat", "w")
 		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder relerrors[wellorder, :]]))
 		close(f)
+		
 		indmaxerror = ind2sub(size(relerrors), indmax(abs(relerrors)))
 		info("The largest absolute relative match error is for $(wellnameorder[indmaxerror[1]]) / $(uniquespecies[indmaxerror[2]]).")
 		println("Observation: $(datamatrix[indmaxerror...])")
@@ -295,10 +341,12 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		println("Error: $(errors[indmaxerror...])")
 		println("Relative error: $(relerrors[indmaxerror...])")
 		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[indmaxerror[1]] relerrors[indmaxerror[1]:indmaxerror[1], :]]))
+		
 		info("Max/min Species in Buckets per species:")
 		maxs1 = maximum(orderedbuckets, 1)
 		mins1 = minimum(orderedbuckets, 1)
 		display([uniquespecies[dataindex] maxs1' mins1'])
+		
 		info("Max/min Species in Buckets per buckets:")
 		maxs2 = maximum(orderedbuckets, 2)
 		mins2 = minimum(orderedbuckets, 2)
