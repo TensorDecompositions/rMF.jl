@@ -974,11 +974,13 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		# NMFk using mixmatch 
 		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(concmatrix, retries, numbuckets; deltas=deltamatrix, deltaindices=deltaindices, ratios=ratios, mixmatch=mixmatch, normalize=normalize, scale=scale, matchwaterdeltas=matchwaterdeltas, mixtures=mixtures, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse, clusterweights=clusterweights)
 		mixsum = sum(mixers[numbuckets], 2)
-		index = find(mixsum .> 1.1) | find(mixsum .< 0.9)
+		checkone = collect(mixsum .< 0.9) | collect(mixsum .> 1.1)
+		index = find(checkone .== true)
 		if length(index) > 0
 			warn("The mixers do not add to 1")
-			display(sum(mixers[numbuckets], 2))
+			display(mixsum)
 			display(mixers[numbuckets])
+			display(buckets[numbuckets])
 		end
 		println("Buckets = $numbuckets; Best objective function = $(fitquality[numbuckets]); Robustness = $(robustness[numbuckets])")
 		if casekeyword == ""
