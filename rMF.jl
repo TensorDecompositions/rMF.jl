@@ -877,15 +877,19 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	name2j = Dict(zip(uniquespecies, 1:length(uniquespecies)))
 	datacount = zeros(Int, length(uniquewells), length(uniquespecies))
 	global datamatrix = zeros(Float32, length(uniquewells), length(uniquespecies))
+	global sdmatrix = zeros(Float32, length(uniquewells), length(uniquespecies))
 	for index = 1:length(wells)
 		i = wells2i[wells[index]]
 		if haskey(name2j, names[index])
 			j = name2j[names[index]]
 			datacount[i, j] += 1
 			datamatrix[i, j] += concs[index]
+			sdmatrix[i, j] += concs[index] * concs[index]
 		end
 	end
+	
 	wellorder, wellnameorder = getwellorder()
+	
 	info("Species ($(length(uniquespecies)))")
 	display(uniquespecies)
 	info("Wells ($(length(wellnameorder)))")
@@ -896,9 +900,21 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	display([wellnameorder sum(datacount,2)[wellorder]])
 	info("Observations per species:")
 	display([uniquespecies sum(datacount,1)'])
+	
+	sdmatrix = sqrt(abs(sdmatrix - (datamatrix .^2) ./ datacount))
+	sdmatrix[datacount.==1] = 0
 	global datamatrix = convert(Array{Float32,2}, datamatrix ./ datacount) # gives NaN if there is no data, otherwise divides by the number of results
+	
 	info("Concentration matrix:")
 	display([transposevector(["Wells"; uniquespecies]); wellnameorder datamatrix[wellorder,:]])
+	info("Concentration standard deviation matrix:")
+	display([transposevector(["Wells"; uniquespecies]); wellnameorder sdmatrix[wellorder,:]])
+
+	indmaxsd = ind2sub(size(sdmatrix), indmax(abs(sdmatrix)))
+	info("The largest standard deviation is $(sdmatrix[indmaxsd[1],indmaxsd[2]]) for $(uniquewells[indmaxsd[1]]) / $(uniquespecies[indmaxsd[2]]) count = $(datacount[indmaxsd[1],indmaxsd[2]]).")
+	indminsd = ind2sub(size(sdmatrix), indmin(abs(sdmatrix[datacount.>1])))
+	info("The smallest non-zero standard deviation is $(sdmatrix[indminsd[1],indminsd[2]]) for $(uniquewells[indminsd[1]]) / $(uniquespecies[indminsd[2]]) count = $(datacount[indminsd[1],indminsd[2]]).")
+
 	info("Potential regularization penalty = $(sum(log(1.+abs(maximum(abs(datamatrix), 1))).^2))")
 	global dataindex = collect(1:size(datamatrix, 2))
 	global concindex = setdiff(dataindex, deltaindex)
