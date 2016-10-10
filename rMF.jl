@@ -5,6 +5,8 @@ import NMFk
 import JLD
 import StatsBase
 import DataStructures
+import HypothesisTests
+import Distributions
 import SpatialAnalysis
 import PyCall
 import Gadfly
@@ -290,6 +292,14 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		dof = numobservations - numbuckets
 		sml = dof + numobservations * (log(fitquality[numbuckets]/dof) / 2 + 1.837877)
 		aic = sml + 2 * numbuckets
+		kstest = HypothesisTests.ExactOneSampleKSTest(verrrors, Distributions.Normal())
+		pval = HypothesisTests.pvalue(kstest)
+		if kstest.δ > pval
+			vertdict = "not normal"
+		else
+			vertdict = "normal"
+		end
+		println("KS Test: $vertdict ($(kstest.δ) $(pval))")
 		println("AIC: $(aic)")
 		println("Mean: $(mean(verrrors))")
 		println("Variance: $(var(verrrors))")
@@ -303,6 +313,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		println(f, "* Degrees of freedom: $(dof)")
 		println(f, "* Fit quality: $(fitquality[numbuckets])")
 		println(f, "* Robustness: $(robustness[numbuckets])")
+		println(f, "* KS Test: $vertdict ($(kstest.δ) $(pval))")
 		println(f, "* AIC: $(aic)")
 		println(f, "* Error stats: $(aic)")
 		println(f, "  - Mean: $(mean(verrrors))")
@@ -971,7 +982,6 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		deltamatrix = Array(Float32, 0, 0)
 	end
 	for numbuckets = range
-		# NMFk using mixmatch 
 		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(concmatrix, retries, numbuckets; deltas=deltamatrix, deltaindices=deltaindices, ratios=ratios, mixmatch=mixmatch, normalize=normalize, scale=scale, matchwaterdeltas=matchwaterdeltas, mixtures=mixtures, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse, clusterweights=clusterweights)
 		mixsum = sum(mixers[numbuckets], 2)
 		checkone = collect(mixsum .< 0.9) | collect(mixsum .> 1.1)
