@@ -16,7 +16,7 @@ import PyPlot
 import Images
 import Compat
 import Compat.AbstractString
-include(ENV["HOME"] * "/Julia/madsdisplay.jl")
+# include(ENV["HOME"] * "/Julia/madsdisplay.jl")
 
 @PyCall.pyimport matplotlib.patheffects as PathEffects
 
@@ -329,7 +329,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		g = Gadfly.plot(x=verrrors, Gadfly.Geom.histogram())
 		filename = "results/$(casestring)-$numbuckets-$retries-error_histogram.png"
 		Gadfly.draw(Gadfly.PNG(filename, 6Gadfly.inch, 4Gadfly.inch), g)
-		madsdisplay(filename)
+		# madsdisplay(filename)
 
 		indmaxerror = ind2sub(size(errors), indmax(abs(errors)))
 		info("The largest absolute match error is for $(wellnameorder[indmaxerror[1]]) / $(uniquespecies[indmaxerror[2]]).")
