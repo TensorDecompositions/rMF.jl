@@ -222,17 +222,65 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		errors[indexnan] = NaN
 		relerrors = errors ./ d
 		relerrors[indexnan] = NaN
+		regularization_penalty = sum(log(1.+abs(orderedbuckets)).^2) / numbuckets
+
+		vector_errors = vec(errors[!indexnan])
+		numobservations = length(vector_errors)
+		dof = numobservations - numbuckets
+		sml = dof + numobservations * (log(fitquality[numbuckets]/dof) / 2 + 1.837877)
+		aic = sml + 2 * numbuckets
+		stddeverrors = std(vector_errors)
+		kstest = HypothesisTests.ExactOneSampleKSTest(vector_errors, Distributions.Normal())
+		pval = HypothesisTests.pvalue(kstest)
+		if kstest.δ > pval
+			vertdict = "not normal"
+		else
+			vertdict = "normal"
+		end
+
+		f = open("results/$(casestring)-$numbuckets-$retries-stats.dat", "w")
+		println(f, "Number of buckets: $(numbuckets)")
+		println(f, "* Degrees of freedom: $(dof)")
+		println(f, "* Reconstruction: $(fitquality[numbuckets])")
+		println(f, "* Reconstruction check: $(of)")
+		println(f, "* Robustness: $(robustness[numbuckets])")
+		println(f, "* KS Test: $vertdict ($(kstest.δ) $(pval))")
+		println(f, "* AIC: $(aic)")
+		println(f, "* Error stats: $(aic)")
+		println(f, "  - Mean: $(mean(vector_errors))")
+		println(f, "  - Variance: $(var(vector_errors))")
+		println(f, "  - Standard Deviation: $(stddeverrors)")
+		println(f, "  - Maximum: $(maximum(vector_errors))")
+		println(f, "  - Minimum: $(minimum(vector_errors))")
+		println(f, "  - Skewness: $(StatsBase.skewness(vector_errors))")
+		println(f, "  - Kurtosis: $(StatsBase.kurtosis(vector_errors))")
+		close(f)
 
 		if brief
-			println("Buckets = $numbuckets; Best objective function = $(fitquality[numbuckets]) (check = $(of); regularization penalty = $(sum(log(1.+abs(orderedbuckets)).^2)/numbuckets)); Robustness = $(robustness[numbuckets])")
+			print("Buckets: $(@sprintf("%2d", numbuckets)) Reconstruction: $(@sprintf("%12.7g", fitquality[numbuckets])) ")
+			if of - fitquality[numbuckets] > 1e-1
+				print("(check fails: $(@sprintf("%12.7g", of))")
+			end
+			println("Robustness: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g",aic)) KS: $(@sprintf("%12.7g", kstest.δ)) StdDev: $(@sprintf("%12.7g",stddeverrors))")
 			continue
 		else
-			info("Fit quality: $(fitquality[numbuckets]) (check = $(of)) (regularization penalty = $(sum(log(1.+abs(orderedbuckets)).^2)/numbuckets))")
+			info("Fit quality: $(fitquality[numbuckets]) (check = $(of)) (regularization penalty = $(regularization_penalty))")
 			if of - fitquality[numbuckets] > 1e-1
 				warn("Objective function test fails!")
 			end
 			info("Robustness: $(robustness[numbuckets])")
 		end
+
+		info("Match error statistics:")
+		println("KS Test: $vertdict ($(kstest.δ) $(pval))")
+		println("AIC: $(aic)")
+		println("Mean: $(mean(vector_errors))")
+		println("Variance: $(var(vector_errors))")
+		println("Standard Deviation: $(stddeverrors)")
+		println("Maximum: $(maximum(vector_errors))")
+		println("Minimum: $(minimum(vector_errors))")
+		println("Skewness: $(StatsBase.skewness(vector_errors))")
+		println("Kurtosis: $(StatsBase.kurtosis(vector_errors))")
 
 		f = open("results/$(casestring)-data.dat", "w")
 		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder datamatrix[wellorder, :]]))
@@ -276,9 +324,9 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		end
 		gs = Gadfly.gridstack(MA)
 		filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.svg"
-		Gadfly.draw(Gadfly.SVG(filename, MArows * (1.6Gadfly.inch + numbuckets * 0.1Gadfly.inch), MAcols * (1.6Gadfly.inch + numconstituents * 0.1Gadfly.inch)), gs)
+		Gadfly.draw(Gadfly.SVG(filename, MArows * (1.2Gadfly.inch + numbuckets * 0.1Gadfly.inch), MAcols * (1.6Gadfly.inch + numconstituents * 0.1Gadfly.inch)), gs)
 		filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.png"
-		Gadfly.draw(Gadfly.PNG(filename, MArows * (1.6Gadfly.inch + numbuckets * 0.1Gadfly.inch), MAcols * (1.6Gadfly.inch + numconstituents * 0.1Gadfly.inch)), gs)
+		Gadfly.draw(Gadfly.PNG(filename, MArows * (1.2Gadfly.inch + numbuckets * 0.1Gadfly.inch), MAcols * (1.6Gadfly.inch + numconstituents * 0.1Gadfly.inch)), gs)
 
 		info("Match errors:")
 		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder errors[wellorder, :]]))
@@ -286,47 +334,8 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder errors[wellorder, :]]))
 		close(f)
 		
-		info("Match error statistics:")
-		verrrors = vec(errors[!isnan(errors)])
-		numobservations = length(verrrors)
-		dof = numobservations - numbuckets
-		sml = dof + numobservations * (log(fitquality[numbuckets]/dof) / 2 + 1.837877)
-		aic = sml + 2 * numbuckets
-		kstest = HypothesisTests.ExactOneSampleKSTest(verrrors, Distributions.Normal())
-		pval = HypothesisTests.pvalue(kstest)
-		if kstest.δ > pval
-			vertdict = "not normal"
-		else
-			vertdict = "normal"
-		end
-		println("KS Test: $vertdict ($(kstest.δ) $(pval))")
-		println("AIC: $(aic)")
-		println("Mean: $(mean(verrrors))")
-		println("Variance: $(var(verrrors))")
-		println("Standard Deviation: $(std(verrrors))")
-		println("Maximum: $(maximum(verrrors))")
-		println("Minimum: $(minimum(verrrors))")
-		println("Skewness: $(StatsBase.skewness(verrrors))")
-		println("Kurtosis: $(StatsBase.kurtosis(verrrors))")
-		f = open("results/$(casestring)-$numbuckets-$retries-stats.dat", "w")
-		println(f, "Number of buckets: $(numbuckets)")
-		println(f, "* Degrees of freedom: $(dof)")
-		println(f, "* Fit quality: $(fitquality[numbuckets])")
-		println(f, "* Robustness: $(robustness[numbuckets])")
-		println(f, "* KS Test: $vertdict ($(kstest.δ) $(pval))")
-		println(f, "* AIC: $(aic)")
-		println(f, "* Error stats: $(aic)")
-		println(f, "  - Mean: $(mean(verrrors))")
-		println(f, "  - Variance: $(var(verrrors))")
-		println(f, "  - Standard Deviation: $(std(verrrors))")
-		println(f, "  - Maximum: $(maximum(verrrors))")
-		println(f, "  - Minimum: $(minimum(verrrors))")
-		println(f, "  - Skewness: $(StatsBase.skewness(verrrors))")
-		println(f, "  - Kurtosis: $(StatsBase.kurtosis(verrrors))")
-		close(f)
-
 		info("Histogram of the estimation errors:")
-		g = Gadfly.plot(x=verrrors, Gadfly.Geom.histogram())
+		g = Gadfly.plot(x=vector_errors, Gadfly.Geom.histogram())
 		filename = "results/$(casestring)-$numbuckets-$retries-error_histogram.png"
 		Gadfly.draw(Gadfly.PNG(filename, 6Gadfly.inch, 4Gadfly.inch), g)
 		# madsdisplay(filename)
