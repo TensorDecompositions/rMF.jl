@@ -39,6 +39,8 @@ deltadependency = Int[]
 dict_species = Dict()
 uniquewells = []
 uniquespecies = []
+truebucket = []
+truemixer = []
 
 #=
 dict_species = DataStructures.OrderedDict{AbstractString,AbstractString}(
@@ -230,7 +232,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		sml = dof + numobservations * (log(fitquality[numbuckets]/dof) / 2 + 1.837877)
 		aic = sml + 2 * numbuckets
 		stddeverrors = std(vector_errors)
-		kstest = HypothesisTests.ExactOneSampleKSTest(vector_errors, Distributions.Normal())
+		kstest = HypothesisTests.ExactOneSampleKSTest(vector_errors, Distributions.Normal(0, stddeverrors))
 		pval = HypothesisTests.pvalue(kstest)
 		if kstest.δ > pval
 			vertdict = "not normal"
@@ -261,7 +263,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			if of - fitquality[numbuckets] > 1e-1
 				print("(check fails: $(@sprintf("%12.7g", of))")
 			end
-			println("Robustness: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g",aic)) KS: $(@sprintf("%12.7g", kstest.δ)) StdDev: $(@sprintf("%12.7g",stddeverrors))")
+			println("Robustness: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g", aic)) KS: $(@sprintf("%12.7g", kstest.δ)) StdDev: $(@sprintf("%12.7g", stddeverrors))")
 			continue
 		else
 			info("Fit quality: $(fitquality[numbuckets]) (check = $(of)) (regularization penalty = $(regularization_penalty))")
@@ -487,11 +489,22 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		info("Ordered buckets:")
 		display([uniquespecies[dataindex] orderedbuckets[source_index,:]'])
 
+		if sizeof(truebucket) > 0
+			info("True buckets:")
+			display([uniquespecies[dataindex] truebucket'])
+		end
+
 		info("Ordered mixers:")
 		smixers = mixers[numbuckets][wellorder, source_index]
 		smixers[smixers .< 0] = 0
 		smixers[smixers .> 1] = 1
 		display([wellnameorder smixers])
+
+		if sizeof(truemixer) > 0
+			info("True mixers:")
+			display([wellnameorder truemixer])
+		end
+
 
 		gmixers = Gadfly.spy(smixers, Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
 					Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
@@ -597,7 +610,10 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 	end
 end
 
-function loaddata(casename::AbstractString, keyword::AbstractString="")
+function loaddata(casename::AbstractString, keyword::AbstractString=""; noise=false)
+	if noise
+		srand(2016)
+	end
 	global case = casename
 	global casekeyword = keyword
 	global mixers = Array(Array{Float64, 2}, maxbuckets)
@@ -657,6 +673,57 @@ function loaddata(casename::AbstractString, keyword::AbstractString="")
 		global concindex = collect(1:size(datamatrix,2))
 		global dataindex = concindex
 		global wellcoord = [[0., 0.] [0., 100.]]
+		info("Concentration matrix:")
+		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
+		return
+	end
+	if casename == "test56s3"
+		global uniquewells = ["W1", "W2", "W3", "W4", "W5"]
+		global uniquespecies = ["A", "B", "C", "D", "E", "F"]
+		global uniquespecies_long = uniquespecies
+		global truemixer = [ 0.1 0.3 0.7;
+							 0.7 0.3 0.1;
+							 0.3 0.3 0.4;
+							 0.0 0.0 1.0;
+							 1.0 0.0 0.0]
+		global truebucket = [ 1.0 0.0 0.0 0.1 0.1 0.1;
+							  0.0 1.0 0.0 0.1 0.1 0.1;
+							  0.0 0.0 1.0 0.1 0.1 0.1]
+		if noise
+			noise_matrix = randn(length(uniquewells), length(uniquespecies)) / 100
+		else
+			noise_matrix = 0
+		end
+		global datamatrix = convert(Array{Float32,2}, truemixer * truebucket + noise_matrix)
+		global concindex = collect(1:size(datamatrix,2))
+		global dataindex = concindex
+		global wellcoord = [[0., 0.] [0., 100.] [50., 50.] [0., 50.] [50., 0.]]
+		info("Concentration matrix:")
+		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
+		return
+	end
+	if casename == "test56s4"
+		global uniquewells = ["W1", "W2", "W3", "W4", "W5"]
+		global uniquespecies = ["A", "B", "C", "D", "E", "F"]
+		global uniquespecies_long = uniquespecies
+		global truemixer = [ 0.1 0.7 0.1 0.1;
+							 0.2 0.4 0.1 0.3;
+							 0.1 0.1 0.7 0.1;
+							 0.4 0.2 0.1 0.3;
+							 0.7 0.1 0.1 0.1]
+		global truebucket = [ 100.0   0.1   0.1   0.1  10.0   0.0;
+							    0.1 100.0   0.3   0.4  90.0  30.0;
+							    0.5   0.4 100.0   0.2  90.0   0.0;
+							    0.1   0.4   0.3 100.0  10.0  30.0]
+		if noise
+			noise_matrix = randn(length(uniquewells), length(uniquespecies)) / 100
+		else
+			noise_matrix = 0
+		end
+		global datamatrix = convert(Array{Float32,2}, truemixer * truebucket + noise_matrix)
+		global concindex = collect(1:size(datamatrix,2))
+		global dataindex = concindex
+		global wellcoord = [[0., 0.] [0., 100.] [50., 50.] [0., 50.] [50., 0.]]
 		info("Concentration matrix:")
 		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 		return
@@ -1017,7 +1084,7 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 			@show mixers[numbuckets]
 			@show buckets[numbuckets]
 		end
-		println("Buckets = $numbuckets; Best objective function = $(fitquality[numbuckets]); Robustness = $(robustness[numbuckets])")
+		println("Buckets: $(@sprintf("%2d", numbuckets)) Reconstruction: $(@sprintf("%12.7g", fitquality[numbuckets])) Robustness: $(@sprintf("%12.7g", robustness[numbuckets]))")
 		if casekeyword == ""
 			filename = "results/$case-$numbuckets-$retries.jld"
 		else
