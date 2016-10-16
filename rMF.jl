@@ -40,6 +40,7 @@ dict_species = Dict()
 uniquewells = []
 uniquespecies = []
 truebucket = []
+truedeltas = []
 truemixer = []
 
 #=
@@ -610,7 +611,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 	end
 end
 
-function loaddata(casename::AbstractString, keyword::AbstractString=""; noise=false)
+function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::Bool=false, ns::Int=3, nw::Int=10, nc::Int=5, nd::Int=0)
 	if noise
 		srand(2016)
 	end
@@ -724,6 +725,57 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise=fa
 		global concindex = collect(1:size(datamatrix,2))
 		global dataindex = concindex
 		global wellcoord = [[0., 0.] [0., 100.] [50., 50.] [0., 50.] [50., 0.]]
+		info("Concentration matrix:")
+		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
+		return
+	end
+	if casename == "test"
+		if ns < 1
+			error("Number of sources should be larger than zero!")
+		end
+		if nw > 0
+			global uniquewells = map(i->"W$i", 1:nw)
+		else
+			error("Number of wells should be larger than zero!")
+			return
+		end
+		if nc > 0
+			global uniquespecies = map(i->string(Char(65 + (i-1)%26))^Int(ceil(i/26)), 1:nc)
+		else
+			error("Number of wells should be larger than zero!")
+			return
+		end
+		global uniquespecies_long = uniquespecies
+		global concindex = collect(1:nc)
+		global dataindex = collect(1:(nc+nd))
+		global wellcoord = []
+		mixer = (rand(nw, ns) .* 2).^10
+		mixer_norm = diagm(1 ./ vec(sum(mixer, 2)))
+		global truemixer = mixer_norm * mixer
+		bucket = (rand(ns, nc) .* 2).^10
+		bucket_norm = diagm(1000 ./ vec(maximum(bucket, 1)))
+		global truebucket = bucket * bucket_norm
+		if noise
+			noise_matrix = randn(nw, nc + nd)
+		else
+			noise_matrix = 0
+		end
+		if nd > 0
+			deltas = map(i->"δ" * string(Char(65 + (i-1)%26))^Int(ceil(i/26)), 1:nd)
+			global uniquespecies = vcat(uniquespecies, deltas)
+			global deltaindex = map(i->(nc + i), 1:nd)
+			global deltadependency = map(i->i, 1:nd)
+			global case = casename * "_" * string(nw) * "_" * string(nc) * "_" * string(ns)  * "_" * string(nd)
+			deltas = (rand(ns, nc) .* 2).^10
+			deltas_norm = diagm(10 ./ vec(maximum(bucket, 1)))
+			global truedeltas = deltas * deltas_norm
+			@show truedeltas
+			deltas = MixMatch.computedeltas(truemixer, truebucket, truedeltas, indexin(deltadependency, concindex))
+			global datamatrix = convert(Array{Float32,2}, hcat(truemixer * truebucket, deltas) + noise_matrix)
+		else
+			global case = casename * "_" * string(nw) * "_" * string(nc) * "_" * string(ns)
+			global datamatrix = convert(Array{Float32,2}, truemixer * truebucket + noise_matrix)
+		end
 		info("Concentration matrix:")
 		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 		return
