@@ -769,7 +769,6 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 			deltas = (rand(ns, nc) .* 2).^10
 			deltas_norm = diagm(10 ./ vec(maximum(bucket, 1)))
 			global truedeltas = deltas * deltas_norm
-			@show truedeltas
 			deltas = MixMatch.computedeltas(truemixer, truebucket, truedeltas, indexin(deltadependency, concindex))
 			global datamatrix = convert(Array{Float32,2}, hcat(truemixer * truebucket, deltas) + noise_matrix)
 		else
