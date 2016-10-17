@@ -16,7 +16,9 @@ import PyPlot
 import Images
 import Compat
 import Compat.AbstractString
-# include(ENV["HOME"] * "/Julia/madsdisplay.jl")
+if isfile(Pkg.dir("Mads") * "/scripts/madsdisplay.jl")
+	include(Pkg.dir("Mads") * "/scripts/madsdisplay.jl")
+end
 
 @PyCall.pyimport matplotlib.patheffects as PathEffects
 
@@ -62,35 +64,35 @@ dict_species = DataStructures.OrderedDict{AbstractString,AbstractString}(
 	"Sulfur-34/Sulfur-32 Ratio (SO4)"=>"δ34S-SO4",
 	"Oxygen-18/Oxygen-16 Ratio from SO4"=>"δ18O-SO4",
 	"Iodine-129/Iodine Ratio (e-15)"=>"rI129",
-	"Fraction Modern Carbon (de-normalized)"=>"f14C",
+	"Fraction Modern Carbon (de-normalized)"=>"r14C",
 	"Dioxane[1,4-]"=>"Dioxane",
 	"Acetaminophen"=>"Acetam",
 	"Caffeine"=>"Caffe",
 	"Sulfamethoxazole"=>"Sulfame")
 JLD.save("data/cr-species.jld", "species", dict_species)
 
-mixtures = DataStructures.OrderedDict{Any,Any}(
-	"Cr"=>Any[],
+deltamixtures = DataStructures.OrderedDict{Any,Any}(
 	"δ53Cr"=>ASCIIString["Cr"],
-	"Cl-"=>Any[],
-	"ClO3"=>Any[],
-	"ClO4"=>Any[],
-	"δ36Cl"=>ASCIIString["Cl-"],
-	"3H"=>Any[],
 	"δ2H"=>Any[],
 	"δ18O"=>Any[],
-	"NO3"=>Any[],
 	"δ15N"=>ASCIIString["NO3"],
 	"δ18O-NO3"=>ASCIIString["NO3"],
-	"SO4"=>Any[],
 	"δ34S-SO4"=>ASCIIString["SO4"],
-	"δ18O-SO4"=>ASCIIString["SO4"],
-	"δI129"=>Any[],
-	"Dioxane"=>Any[],
-	"Acetam"=>Any[],
-	"Caffe"=>Any[],
-	"Sulfame"=>Any[])
-JLD.save("data/cr-stable-isotope-mixtures.jld", "mixtures", mixtures)
+	"δ18O-SO4"=>ASCIIString["SO4"])
+JLD.save("data/cr-stable-isotope-mixtures.jld", "deltamixtures", deltamixtures)
+
+isotoperatios = DataStructures.OrderedDict{Any,Any}(
+	"r36Cl"=>ASCIIString["Cl-"],
+	"rI129"=>ASCIIString["I"])
+JLD.save("data/cr-stable-isotope-ratios.jld", "isotoperatios", isotoperatios)
+
+deltastandards = DataStructures.OrderedDict{Any,Any}(
+	"δ53Cr"=>0.0001,
+	"δ15N"=>0.003676,
+	"δ18O-NO3"=>0.0020004,
+	"δ34S-SO4"=>0.045005,
+	"δ18O-SO4"=>0.0020004)
+JLD.save("data/cr-stable-isotope-standards.jld", "deltastandards", deltastandards)
 =#
 
 info("rMF (Robust Matrix Factorization)")
@@ -98,7 +100,19 @@ info("")
 info("Use `rMF.loaddata()` to get data")
 info("Use `rMF.execute(5, retries=50)` to compute the results for the 5 bucket case with 50 reruns")
 info("Use `rMF.getresults(5, retries=50)` to get the results for the 5 bucket case.")
-info("Use `rMF.getresults(5:6, retries=50; brief=true)` to see the results for bucket cases 5 to 8.")
+info("Use `rMF.getresults(5:8, retries=50; brief=true)` to see the results for bucket cases 5 to 8.")
+
+"Convert stable isotope deltas to concentrations"
+function getisotopeconcentration(delta::Union{Number,Vector}, deltastandard::Number, concentration_species::Number)
+	ratio = deltastandard * (delta / 1000 + 1)
+	concentration_isotope  = concentration_species * ratio ./ (1.0 + ratio)
+end
+
+"Convert stable isotope concentrations to deltas"
+function getisotopedelta(concentration_isotope::Union{Number,Vector}, deltastandard::Number, concentration_species::Number)
+	ratio = concentration_isotope ./ (concentration_species - concentration_isotope)
+	delta_isotope = (ratio - deltastandard) ./ deltastandard * 1000
+end
 
 function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::AbstractString=""; retries=10, brief::Bool=false)
 	if keyword != ""
@@ -306,30 +320,32 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder spredictions[source_index[i]][wellorder, :]]))
 		end
 
-		MArows = 5
-		MAcols = Int(ceil(numwells/5))
-		MA = Array(Compose.Context, (MArows, MAcols))
-		i = 1
-		for w in wellorder
-			b = abs(hcat(map(i->collect(spredictions[i][w,:]), 1:numbuckets)...)) ./ abs(predictions[w:w, :]')
-			b = b ./ maximum(b, 2)
-			MA[i] = Gadfly.render(Gadfly.spy(b[:,source_index], Gadfly.Guide.title(wellnameorder[i]),
-					Gadfly.Guide.xticks(orientation=:horizontal), Gadfly.Guide.yticks(orientation=:horizontal),
-					Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete(),
-					Gadfly.Guide.YLabel("", orientation=:vertical), Gadfly.Guide.XLabel("", orientation=:horizontal), 
-					Gadfly.Guide.colorkey(""),
-					Gadfly.Theme(key_position=:none, major_label_font_size=10Gadfly.pt, minor_label_font_size=8Gadfly.pt, key_title_font_size=10Gadfly.pt, key_label_font_size=8Gadfly.pt),
-					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1)))
-			i += 1
+		if VERSION < v"0.5"
+			MArows = 5
+			MAcols = Int(ceil(numwells/5))
+			MA = Array(Compose.Context, (MArows, MAcols))
+			i = 1
+			for w in wellorder
+				b = abs(hcat(map(i->collect(spredictions[i][w,:]), 1:numbuckets)...)) ./ abs(predictions[w:w, :]')
+				b = b ./ maximum(b, 2)
+				MA[i] = Gadfly.render(Gadfly.spy(b[:,source_index], Gadfly.Guide.title(wellnameorder[i]),
+						Gadfly.Guide.xticks(orientation=:horizontal), Gadfly.Guide.yticks(orientation=:horizontal),
+						Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete(),
+						Gadfly.Guide.YLabel("", orientation=:vertical), Gadfly.Guide.XLabel("", orientation=:horizontal), 
+						Gadfly.Guide.colorkey(""),
+						Gadfly.Theme(key_position=:none, major_label_font_size=10Gadfly.pt, minor_label_font_size=8Gadfly.pt, key_title_font_size=10Gadfly.pt, key_label_font_size=8Gadfly.pt),
+						Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1)))
+				i += 1
+			end
+			for w in numwells+1:MArows*MAcols
+				MA[w] = Compose.context()
+			end
+			gs = Gadfly.gridstack(MA)
+			filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.svg"
+			Gadfly.draw(Gadfly.SVG(filename, MArows * (1.2Gadfly.inch + numbuckets * 0.1Gadfly.inch), MAcols * (1.6Gadfly.inch + numconstituents * 0.1Gadfly.inch)), gs)
+			filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.png"
+			Gadfly.draw(Gadfly.PNG(filename, MArows * (1.2Gadfly.inch + numbuckets * 0.1Gadfly.inch), MAcols * (1.6Gadfly.inch + numconstituents * 0.1Gadfly.inch)), gs)
 		end
-		for w in numwells+1:MArows*MAcols
-			MA[w] = Compose.context()
-		end
-		gs = Gadfly.gridstack(MA)
-		filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.svg"
-		Gadfly.draw(Gadfly.SVG(filename, MArows * (1.2Gadfly.inch + numbuckets * 0.1Gadfly.inch), MAcols * (1.6Gadfly.inch + numconstituents * 0.1Gadfly.inch)), gs)
-		filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.png"
-		Gadfly.draw(Gadfly.PNG(filename, MArows * (1.2Gadfly.inch + numbuckets * 0.1Gadfly.inch), MAcols * (1.6Gadfly.inch + numconstituents * 0.1Gadfly.inch)), gs)
 
 		info("Match errors:")
 		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder errors[wellorder, :]]))
@@ -341,7 +357,9 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		g = Gadfly.plot(x=vector_errors, Gadfly.Geom.histogram())
 		filename = "results/$(casestring)-$numbuckets-$retries-error_histogram.png"
 		Gadfly.draw(Gadfly.PNG(filename, 6Gadfly.inch, 4Gadfly.inch), g)
-		# madsdisplay(filename)
+		if isdefined(:madsdisplay)
+			madsdisplay(filename)
+		end
 
 		indmaxerror = ind2sub(size(errors), indmax(abs(errors)))
 		info("The largest absolute match error is for $(wellnameorder[indmaxerror[1]]) / $(uniquespecies[indmaxerror[2]]).")
@@ -765,6 +783,8 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 			global uniquespecies = vcat(uniquespecies, deltas)
 			global deltaindex = map(i->(nc + i), 1:nd)
 			global deltadependency = map(i->i, 1:nd)
+			@show deltaindex
+			@show deltadependency
 			global case = casename * "_" * string(nw) * "_" * string(nc) * "_" * string(ns)  * "_" * string(nd)
 			deltas = (rand(ns, nc) .* 2).^10
 			deltas_norm = diagm(10 ./ vec(maximum(bucket, 1)))
@@ -878,8 +898,8 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 				ss = readdlm(filename)
 				sd = setdiff(ss, uniquespecies)
 				if length(sd) > 0
-					error("There are species in $filename missing!")
 					display(sd)
+					error("There are species in $filename missing!")
 					return
 				end
 				sd = setdiff(uniquespecies, ss)
@@ -902,13 +922,13 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	end
 	filename = "data/cr-stable-isotope-mixtures.jld"
 	if isfile(filename)
-		isotope_mixtures = JLD.load(filename, "mixtures")
+		deltamixtures = JLD.load(filename, "deltamixtures")
 		deltaindex = Int[]
 		deltadependency = Int[]
 		i = 1
 		for s in uniquespecies
-			if haskey(isotope_mixtures, s)
-				ind = findin(uniquespecies, isotope_mixtures[s])
+			if haskey(deltamixtures, s)
+				ind = findin(uniquespecies, deltamixtures[s])
 				lind = length(ind)
 				if lind == 1
 					push!(deltaindex, i)
@@ -923,6 +943,21 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 		end
 		global deltaindex = deltaindex
 		global deltadependency = deltadependency
+	else
+		warn("$filename is missing!")
+	end
+	filename = "data/cr-stable-isotope-standards.jld"
+	if isfile(filename)
+		dict_deltastandards = JLD.load(filename, "deltastandards")
+		deltastandards = Float64[]
+		for s in uniquespecies[deltaindex]
+			if haskey(dict_deltastandards, s)
+				push!(deltastandards, dict_deltastandards[s])
+			else
+				throw("Delta Standard is mising for $(s)")
+			end
+		end
+		global deltastandards = deltastandards
 	else
 		warn("$filename is missing!")
 	end
@@ -1149,13 +1184,11 @@ end
 info("")
 info("Use `rMF.loaddata()` to load different data sets:")
 info("rMF.loaddata(20151202) - original fingerprint data set")
-info("rMF.loaddata(20160102) - original fingerprint data set without pz wells")
 info("rMF.loaddata(20160202) - new fingerprint data set with pz wells")
-info("rMF.loaddata(20160302) - new fingerprint data set without pz wells")
+info("""rMF.loaddata(20160202; wellsset="01", speciesset="13")""")
 info("""rMF.loaddata("rdx-20160721")""")
-info("")
-info("Use `rMF.execute()` to perform rMF analyses:")
-info("rMF.execute(2:4, retries=100)")
+info("""rMF.loaddata("test56s5")""")
+info("""rMF.loaddata("test", nw=6, nc=4, ns=3)""")
 info("")
 info("Have fun ...")
 
