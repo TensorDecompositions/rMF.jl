@@ -102,18 +102,6 @@ info("Use `rMF.execute(5, retries=50)` to compute the results for the 5 bucket c
 info("Use `rMF.getresults(5, retries=50)` to get the results for the 5 bucket case.")
 info("Use `rMF.getresults(5:8, retries=50; brief=true)` to see the results for bucket cases 5 to 8.")
 
-"Convert stable isotope deltas to concentrations"
-function getisotopeconcentration(delta::Union{Number,Vector}, deltastandard::Number, concentration_species::Number)
-	ratio = deltastandard * (delta / 1000 + 1)
-	concentration_isotope  = concentration_species * ratio ./ (1.0 + ratio)
-end
-
-"Convert stable isotope concentrations to deltas"
-function getisotopedelta(concentration_isotope::Union{Number,Vector}, deltastandard::Number, concentration_species::Number)
-	ratio = concentration_isotope ./ (concentration_species - concentration_isotope)
-	delta_isotope = (ratio - deltastandard) ./ deltastandard * 1000
-end
-
 function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::AbstractString=""; retries=10, brief::Bool=false)
 	if keyword != ""
 		if case != "" && !contains(keyword, case)
@@ -451,6 +439,8 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 				minm[i] = 0
 			end
 		end
+
+		info("Max/min Species in model predictions for each well:")
 		maxiw = maximum(bucketimpactwells, 1)
 		miniw = minimum(bucketimpactwells, 1)
 		display([wellnameorder maxiw' miniw'])
@@ -459,6 +449,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 				miniw[i] = 0
 			end
 		end
+		
 		bucketimpactwells[source_index, wellorder] = (bucketimpactwells .- miniw) ./ (maxiw - miniw)
 		gmixers = Gadfly.spy(bucketimpactwells', Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
 					Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
@@ -647,6 +638,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		global uniquespecies = ["δA", "A", "B"]
 		global uniquespecies_long = uniquespecies
 		global datamatrix = convert(Array{Float32, 2}, [[0.1, 1.] [1., 0.1] [0.1, 1.]])
+		global deltastandards = [1]
 		global deltaindex = Int[1]
 		global deltadependency = Int[2]
 		global dataindex = collect(1:size(datamatrix, 2))
@@ -1121,7 +1113,7 @@ end
 """
 Perform rMF analyses
 """
-function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtures::Bool=true, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, matchwaterdeltas::Bool=false, quiet::Bool=true,clusterweights::Bool=true)
+function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtures::Bool=true, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, matchwaterdeltas::Bool=false, quiet::Bool=true, clusterweights::Bool=true, convertdeltas::Bool=true)
 	if sizeof(datamatrix) == 0
 		warn("Execute `rMF.loaddata()` first!")
 		return
@@ -1155,6 +1147,20 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		display([transposevector(["Wells"; uniquespecies[concindex]]); uniquewells concmatrix])
 		info("Delta matrix:")
 		display([transposevector(["Wells"; uniquespecies[deltaindex]]); uniquewells deltamatrix])
+		if convertdeltas
+			isotopeconcentrations = MixMatch.getisotopeconcentration(deltamatrix, deltastandards, datamatrix[:, deltadependency])
+			info("Converted delta matrix to concentrations:")
+			display([transposevector(["Wells"; uniquespecies[deltaindex]]); uniquewells isotopeconcentrations])
+			deltas = MixMatch.getisotopedelta(isotopeconcentrations, deltastandards, datamatrix[:, deltadependency])
+			info("Converted stable isotope concentrations back to deltas (test):")
+			display([transposevector(["Wells"; uniquespecies[deltaindex]]); uniquewells deltas])
+			concmatrix = copy(datamatrix)
+			concmatrix[:, deltaindex] = isotopeconcentrations
+			info("Concentration matrix:")
+			display([transposevector(["Wells"; uniquespecies]); uniquewells concmatrix])
+			deltaindices = deltadependency
+			deltamatrix = Array(Float32, 0, 0)
+		end
 	else
 		deltaindices = deltadependency
 		deltamatrix = Array(Float32, 0, 0)
@@ -1175,6 +1181,12 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 			filename = "results/$case-$numbuckets-$retries.jld"
 		else
 			filename = "results/$case-$casekeyword-$numbuckets-$retries.jld"
+		end
+		if convertdeltas
+			deltas = MixMatch.getisotopedelta(buckets[numbuckets][:, deltaindex], deltastandards, buckets[numbuckets][:, deltadependency])
+			buckets[numbuckets][:, deltaindex] = deltas
+			info("Estimated buckets:")
+			display([transposevector(["Wells"; uniquespecies]); uniquewells buckets[numbuckets]])
 		end
 		JLD.save(filename, "wells", uniquewells, "species", uniquespecies, "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets], "regularizationweight", regularizationweight)
 	end
