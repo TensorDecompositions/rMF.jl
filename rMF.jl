@@ -449,7 +449,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 				miniw[i] = 0
 			end
 		end
-		
+
 		bucketimpactwells[source_index, wellorder] = (bucketimpactwells .- miniw) ./ (maxiw - miniw)
 		gmixers = Gadfly.spy(bucketimpactwells', Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
 					Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
@@ -775,11 +775,10 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 			global uniquespecies = vcat(uniquespecies, deltas)
 			global deltaindex = map(i->(nc + i), 1:nd)
 			global deltadependency = map(i->i, 1:nd)
-			@show deltaindex
-			@show deltadependency
+			global deltastandards = map(i->1, 1:nd)
 			global case = casename * "_" * string(nw) * "_" * string(nc) * "_" * string(ns)  * "_" * string(nd)
-			deltas = (rand(ns, nc) .* 2).^10
-			deltas_norm = diagm(10 ./ vec(maximum(bucket, 1)))
+			deltas = (rand(ns, nd) .* 2).^10
+			deltas_norm = diagm(10 ./ vec(maximum(deltas, 1)))
 			global truedeltas = deltas * deltas_norm
 			deltas = MixMatch.computedeltas(truemixer, truebucket, truedeltas, indexin(deltadependency, concindex))
 			global datamatrix = convert(Array{Float32,2}, hcat(truemixer * truebucket, deltas) + noise_matrix)
@@ -1185,8 +1184,22 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		if convertdeltas
 			deltas = MixMatch.getisotopedelta(buckets[numbuckets][:, deltaindex], deltastandards, buckets[numbuckets][:, deltadependency])
 			buckets[numbuckets][:, deltaindex] = deltas
+		end
+		if length(range) == 1
 			info("Estimated buckets:")
-			display([transposevector(["Wells"; uniquespecies]); uniquewells buckets[numbuckets]])
+			display([uniquespecies[dataindex] buckets[numbuckets]'])
+			info("True buckets:")
+			if sizeof(truedeltas) > 0
+				display([uniquespecies[dataindex] hcat(truebucket, truedeltas)'])
+			else
+				display([uniquespecies[dataindex] truebucket'])
+			end
+			info("Estimated mixers:")
+			display([uniquewells mixers[numbuckets]])
+			if sizeof(truemixer) > 0
+				info("True mixers:")
+				display([uniquewells truemixer])
+			end
 		end
 		JLD.save(filename, "wells", uniquewells, "species", uniquespecies, "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets], "regularizationweight", regularizationweight)
 	end
