@@ -47,23 +47,34 @@ truemixer = []
 
 #=
 dict_species = DataStructures.OrderedDict{AbstractString,AbstractString}(
+	"Acidity or Alkalinity of a solution"=>"pH",
+	"Alkalinity-CO3+HCO3"=>"CO3",
 	"Chromium"=>"Cr",
 	"Chromium-53/52"=>"δ53Cr",
 	"Bromide"=>"Br-",
+	"Calcium"=>"Ca",
 	"Chloride"=>"Cl-",
 	"Chlorate"=>"ClO3",
 	"Perchlorate"=>"ClO4",
+	"CHLORINE-36"=>"36Cl",
 	"Chlorine-36/Chlorine Ratio (e-15)"=>"r36Cl",
 	"Tritium"=>"3H",
 	"Deuterium Ratio"=>"δ2H",
 	"Oxygen-18/Oxygen-16 Ratio"=>"δ18O",
+	"Magnesium"=>"Mg",
 	"Nitrate-Nitrite as Nitrogen"=>"NO3",
 	"Nitrogen-15/Nitrogen-14 Ratio(NO3)"=>"δ15N",
+	"Nitrogen-15/Nitrogen-14 Ratio"=>"δ15N",
 	"Oxygen-18/Oxygen-16 Ratio from Nitrate"=>"δ18O-NO3",
 	"Sulfate"=>"SO4",
 	"Sulfur-34/Sulfur-32 Ratio (SO4)"=>"δ34S-SO4",
 	"Oxygen-18/Oxygen-16 Ratio from SO4"=>"δ18O-SO4",
-	"Iodine-129/Iodine Ratio (e-15)"=>"rI129",
+	"Potassium"=>"K",
+	"Rhenium"=>"Re",
+	"Sodium"=>"Na",
+	"Iodate"=>"IO3",
+	"Iodine-129"=>"129I",
+	"Iodine-129/Iodine Ratio (e-15)"=>"r129I",
 	"Fraction Modern Carbon (de-normalized)"=>"r14C",
 	"Dioxane[1,4-]"=>"Dioxane",
 	"Acetaminophen"=>"Acetam",
@@ -87,11 +98,11 @@ isotoperatios = DataStructures.OrderedDict{Any,Any}(
 JLD.save("data/cr-stable-isotope-ratios.jld", "isotoperatios", isotoperatios)
 
 deltastandards = DataStructures.OrderedDict{Any,Any}(
-	"δ53Cr"=>0.0001,
+	"δ53Cr"=>0.11339,
 	"δ15N"=>0.003676,
-	"δ18O-NO3"=>0.0020004,
+	"δ18O-NO3"=>0.0.0020052,
 	"δ34S-SO4"=>0.045005,
-	"δ18O-SO4"=>0.0020004)
+	"δ18O-SO4"=>0.0.0020052)
 JLD.save("data/cr-stable-isotope-standards.jld", "deltastandards", deltastandards)
 =#
 
@@ -129,7 +140,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			mixers[numbuckets] = j["mixers"]
 			fitquality[numbuckets] = j["fit"]
 			robustness[numbuckets] = j["robustness"]
-			order = DataStructures.OrderedDict(zip(uniquespecies_long, 1:length(uniquespecies_long)))
+			order = DataStructures.OrderedDict(zip(uniquespecies, 1:length(uniquespecies)))
 			if haskey(j, "uniquewells") && haskey(j, "uniquespecies")
 				wells = j["uniquewells"]
 				species = j["uniquespecies"]
@@ -139,7 +150,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 					dictold=JLD.load("data/cr-species-order-$(case).jld","dictionary")
 					remap = DataStructures.OrderedDict(zip(collect(keys(dictold)), 1:length(uniquespecies)))
 				else
-					remap = DataStructures.OrderedDict(zip(uniquespecies_long, 1:length(uniquespecies_long)))
+					remap = DataStructures.OrderedDict(zip(uniquespecies, 1:length(uniquespecies)))
 				end
 			end
 			for i in keys(order)
@@ -636,7 +647,6 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 	if casename == "test23delta"
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["δA", "A", "B"]
-		global uniquespecies_long = uniquespecies
 		global datamatrix = convert(Array{Float32, 2}, [[0.1, 1.] [1., 0.1] [0.1, 1.]])
 		global deltastandards = [1]
 		global deltaindex = Int[1]
@@ -651,7 +661,6 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 	if casename == "test23delta2"
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "B", "δA"]
-		global uniquespecies_long = uniquespecies
 		global datamatrix = convert(Array{Float32, 2}, [[1., 0.1] [0.1, 1.] [0.1, 1.]])
 		global deltaindex = Int[3]
 		global deltadependency = Int[1]
@@ -665,7 +674,6 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 	if casename == "test23ratio"
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "B", "A/B"]
-		global uniquespecies_long = uniquespecies
 		global datamatrix = convert(Array{Float32, 2}, [[NaN, 2] [1, NaN] [1., 2.]])
 		global ratioindex = Int[3]
 		global ratiocomponents = Int[1, 2]
@@ -679,7 +687,6 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 	if casename == "test23"
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "B", "C"]
-		global uniquespecies_long = uniquespecies
 		global datamatrix = convert(Array{Float32,2}, [[1., 1.] [2., 4.] [2., 2.]])
 		global concindex = collect(1:size(datamatrix,2))
 		global dataindex = concindex
@@ -691,7 +698,6 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 	if casename == "test56s3"
 		global uniquewells = ["W1", "W2", "W3", "W4", "W5"]
 		global uniquespecies = ["A", "B", "C", "D", "E", "F"]
-		global uniquespecies_long = uniquespecies
 		global truemixer = [ 0.1 0.3 0.7;
 							 0.7 0.3 0.1;
 							 0.3 0.3 0.4;
@@ -716,7 +722,6 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 	if casename == "test56s4"
 		global uniquewells = ["W1", "W2", "W3", "W4", "W5"]
 		global uniquespecies = ["A", "B", "C", "D", "E", "F"]
-		global uniquespecies_long = uniquespecies
 		global truemixer = [ 0.1 0.7 0.1 0.1;
 							 0.2 0.4 0.1 0.3;
 							 0.1 0.1 0.7 0.1;
@@ -755,7 +760,6 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 			error("Number of wells should be larger than zero!")
 			return
 		end
-		global uniquespecies_long = uniquespecies
 		global concindex = collect(1:nc)
 		global dataindex = collect(1:(nc+nd))
 		global wellcoord = []
@@ -795,7 +799,6 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 	rawdata[rawdata .== ""] = NaN
 	global uniquewells = rawdata[2:end, 1]
 	global uniquespecies = rawdata[1, 2:end]'
-	global uniquespecies_long = uniquespecies
 	global datamatrix = convert(Array{Float32,2}, rawdata[2:end, 2:end])
 	global concindex = collect(1:size(datamatrix,2))
 	global dataindex = concindex
@@ -881,8 +884,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	filename = "data/cr-species.jld"
 	if isfile(filename)
 		global dict_species = JLD.load(filename, "species")
-		global uniquespecies = collect(values(dict_species))
-		global uniquespecies_long = collect(keys(dict_species))
+		global uniquespecies = unique(collect(values(dict_species)))
 		if speciesset != ""
 			filename = "data/cr-species-set$(speciesset).txt"
 			if isfile(filename)
@@ -899,7 +901,6 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 					display(sd)
 					ind = findin(uniquespecies, ss)
 					global uniquespecies = uniquespecies[ind]
-					global uniquespecies_long = uniquespecies_long[ind]
 				end
 				dnames = ss
 			else
@@ -984,11 +985,12 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	goodindices = 1:length(wells)
 	if wellsset == ""
 		# remove MCOI LAOI SCI R-6i TA-53i
-		goodindices = filter(i->!contains(wells[i], "MCOI"), goodindices)
-		goodindices = filter(i->!contains(wells[i], "LAOI"), goodindices)
-		goodindices = filter(i->!contains(wells[i], "SCI"), goodindices)
-		goodindices = filter(i->!contains(wells[i], "R-6i"), goodindices)
-		goodindices = filter(i->!contains(wells[i], "TA-53i"), goodindices)
+		sd = ["MCOI", "LAOI", "SCI", "R-6i", "TA-53i"]
+		warn("The following wells will be removed!")
+		display(sd)
+		for w in sd
+			goodindices = filter(i->!contains(wells[i], w), goodindices)
+		end
 	else
 		filename = "data/cr-wells-set$(wellsset).txt"
 		if isfile(filename)
@@ -1055,6 +1057,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	display([uniquespecies sum(datacount,1)'])
 	
 	sdmatrix = sqrt(abs(sdmatrix - (datamatrix .^2) ./ datacount))
+	sdmatrix[isnan(sdmatrix)] = 0
 	sdmatrix[datacount.==1] = 0
 	global datamatrix = convert(Array{Float32,2}, datamatrix ./ datacount) # gives NaN if there is no data, otherwise divides by the number of results
 	
@@ -1063,12 +1066,23 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	info("Concentration standard deviation matrix:")
 	display([transposevector(["Wells"; uniquespecies]); wellnameorder sdmatrix[wellorder,:]])
 
-	indmaxsd = ind2sub(size(sdmatrix), indmax(abs(sdmatrix)))
-	info("The largest standard deviation is $(sdmatrix[indmaxsd[1],indmaxsd[2]]) for $(uniquewells[indmaxsd[1]]) / $(uniquespecies[indmaxsd[2]]) count = $(datacount[indmaxsd[1],indmaxsd[2]]).")
-	indminsd = ind2sub(size(sdmatrix), indmin(abs(sdmatrix[datacount.>1])))
-	info("The smallest non-zero standard deviation is $(sdmatrix[indminsd[1],indminsd[2]]) for $(uniquewells[indminsd[1]]) / $(uniquespecies[indminsd[2]]) count = $(datacount[indminsd[1],indminsd[2]]).")
+	info("Maximum standard deviation for various species:")
+	display([uniquespecies maximum(sdmatrix, 1)'])
+	sdmatrix2 = deepcopy(sdmatrix)
+	mmm = Inf
+	for i = 1:20
+		indmaxsd = ind2sub(size(sdmatrix2), indmax(sdmatrix2))
+		mmm = sdmatrix2[indmaxsd[1],indmaxsd[2]]
+		info("Standard deviation #$i $(mmm) for $(uniquewells[indmaxsd[1]]) / $(uniquespecies[indmaxsd[2]]) count = $(datacount[indmaxsd[1],indmaxsd[2]])")
+		if mmm <= 0
+			break
+		end
+		sdmatrix2[indmaxsd[1],indmaxsd[2]] = 0
+	end
+	indminsd = ind2sub(size(sdmatrix), indmin(sdmatrix[sdmatrix.>0]))
+	info("The smallest non-zero standard deviation is $(sdmatrix[indminsd[1],indminsd[2]]) for $(uniquewells[indminsd[1]]) / $(uniquespecies[indminsd[2]]) count = $(datacount[indminsd[1],indminsd[2]])")
 
-	info("Potential regularization penalty = $(sum(log(1.+abs(maximum(abs(datamatrix), 1))).^2))")
+	info("Potential regularization penalty = $(sum(log(1 .+ abs(maximum(datamatrix, 1))).^2))")
 	global dataindex = collect(1:size(datamatrix, 2))
 	global concindex = setdiff(dataindex, deltaindex)
 	coord, coordheader = readdlm("data/cr-well-coord.dat", header=true)
@@ -1089,7 +1103,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	for i in 1:length(uniquelongnames)
 		if !haskey(dict_species, uniquelongnames[i])
 			not_ok = true
-			warn("Species name $(uniquelongnames[i]) in the data set is not defined in the dictionary!")
+			warn("Species name `$(uniquelongnames[i])` in the data set is not defined in the dictionary!")
 		end
 	end
 	if !not_ok
@@ -1098,10 +1112,11 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	
 	info("Check species in the data set ...")
 	not_ok = false
+	uniquespecies_long = collect(keys(dict_species))
 	for i in 1:length(uniquespecies_long)
 		if indexin([uniquespecies_long[i]], uniquelongnames)[1] == 0
 			not_ok = true
-			warn("Species name $(uniquespecies_long[i]) defined in the dictionary is missing in the data set!")
+			warn("Species name `$(uniquespecies_long[i])` defined in the dictionary is missing in the data set!")
 		end
 	end
 	if !not_ok
