@@ -799,6 +799,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 	rawdata[rawdata .== ""] = NaN
 	global uniquewells = rawdata[2:end, 1]
 	global uniquespecies = rawdata[1, 2:end]'
+	@show rawdata[2:end, 2:end]
 	global datamatrix = convert(Array{Float32,2}, rawdata[2:end, 2:end])
 	global concindex = collect(1:size(datamatrix,2))
 	global dataindex = concindex
@@ -1196,7 +1197,7 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		else
 			filename = "results/$case-$casekeyword-$numbuckets-$retries.jld"
 		end
-		if convertdeltas
+		if convertdeltas && isdefined(:deltastandards)
 			deltas = MixMatch.getisotopedelta(buckets[numbuckets][:, deltaindex], deltastandards, buckets[numbuckets][:, deltadependency])
 			buckets[numbuckets][:, deltaindex] = deltas
 		end
