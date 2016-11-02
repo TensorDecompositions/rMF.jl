@@ -341,9 +341,9 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			end
 			gs = Gadfly.gridstack(MA)
 			filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.svg"
-			Gadfly.draw(Gadfly.SVG(filename, MArows * (1.2Gadfly.inch + numbuckets * 0.1Gadfly.inch), MAcols * (1.6Gadfly.inch + numconstituents * 0.1Gadfly.inch)), gs)
+			Gadfly.draw(Gadfly.SVG(filename, MArows * (0.8Gadfly.inch + numbuckets * 0.2Gadfly.inch), MAcols * (0.4fGadfly.inch + numconstituents * 0.2Gadfly.inch)), gs)
 			filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.png"
-			Gadfly.draw(Gadfly.PNG(filename, MArows * (1.2Gadfly.inch + numbuckets * 0.1Gadfly.inch), MAcols * (1.6Gadfly.inch + numconstituents * 0.1Gadfly.inch)), gs)
+			Gadfly.draw(Gadfly.PNG(filename, MArows * (0.8Gadfly.inch + numbuckets * 0.2Gadfly.inch), MAcols * (0.4Gadfly.inch + numconstituents * 0.2Gadfly.inch)), gs)
 		end
 
 		info("Match errors:")
@@ -492,11 +492,12 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
 					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
 		# filename, format = Mads.setimagefileformat(filename, format)
-		filename = "results/$(casestring)-$numbuckets-$retries-buckets1.svg"
+		filename = "results/$(casestring)-$numbuckets-$retries-buckets.svg"
 		Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
-		filename = "results/$(casestring)-$numbuckets-$retries-buckets1.png"
+		filename = "results/$(casestring)-$numbuckets-$retries-buckets.png"
 		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
 
+#=
 		gbucket = Gadfly.spy(s2buckets', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
 					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
 					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
@@ -506,7 +507,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
 		filename = "results/$(casestring)-$numbuckets-$retries-buckets2.png"
 		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
-
+=#
 		info("Ordered buckets:")
 		display([uniquespecies[dataindex] orderedbuckets[source_index,:]'])
 
