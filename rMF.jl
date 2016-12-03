@@ -16,6 +16,7 @@ import PyPlot
 import Images
 import Compat
 import Compat.AbstractString
+
 if isfile(Pkg.dir("Mads") * "/scripts/madsdisplay.jl")
 	include(Pkg.dir("Mads") * "/scripts/madsdisplay.jl")
 end
@@ -795,22 +796,24 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 		return
 	end
-	rawdata = readcsv("data/" * casename * ".csv")
-	rawdata[rawdata .== " "] = NaN
-	rawdata[rawdata .== ""] = NaN
-	global uniquewells = rawdata[2:end, 1]
-	global uniquespecies = rawdata[1, 2:end]'
-	@show rawdata[2:end, 2:end]
-	global datamatrix = convert(Array{Float32,2}, rawdata[2:end, 2:end])
-	global concindex = collect(1:size(datamatrix,2))
-	global dataindex = concindex
-	info("Species ($(length(uniquespecies)))")
-	display(uniquespecies)
-	info("Wells ($(length(uniquewells)))")
-	display(uniquewells)
-	info("Concentration matrix:")
-	display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
-	return
+	filename = "data/" * casename * ".csv"
+	if isfile(filename)
+		rawdata = readcsv(filename)
+		rawdata[rawdata .== " "] = NaN
+		rawdata[rawdata .== ""] = NaN
+		global uniquewells = rawdata[2:end, 1]
+		global uniquespecies = rawdata[1, 2:end]'
+		global datamatrix = convert(Array{Float32,2}, rawdata[2:end, 2:end])
+		global concindex = collect(1:size(datamatrix,2))
+		global dataindex = concindex
+		info("Species ($(length(uniquespecies)))")
+		display(uniquespecies)
+		info("Wells ($(length(uniquewells)))")
+		display(uniquewells)
+		info("Concentration matrix:")
+		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
+		return
+	end
 end
 
 function getwellorder()
