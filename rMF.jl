@@ -9,7 +9,7 @@ import HypothesisTests
 import Distributions
 import SpatialAnalysis
 import PyCall
-import Gadfly
+# import Gadfly
 import Compose
 import Colors
 import PyPlot
@@ -114,7 +114,7 @@ info("Use `rMF.execute(5, retries=50)` to compute the results for the 5 bucket c
 info("Use `rMF.getresults(5, retries=50)` to get the results for the 5 bucket case.")
 info("Use `rMF.getresults(5:8, retries=50; brief=true)` to see the results for bucket cases 5 to 8.")
 
-function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::AbstractString=""; retries=10, brief::Bool=false)
+function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::AbstractString=""; retries::Int=10, brief::Bool=false)
 	if keyword != ""
 		if case != "" && !contains(keyword, case)
 			casestring = case * "-" * keyword
@@ -133,7 +133,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			return
 		end
 	end
-	for numbuckets = range
+	for numbuckets in range
 		filename = "results/$(casestring)-$numbuckets-$retries.jld"
 		if isfile(filename)
 			j = JLD.load(filename)
@@ -276,7 +276,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		if brief
 			print("Buckets: $(@sprintf("%2d", numbuckets)) Reconstruction: $(@sprintf("%12.7g", fitquality[numbuckets])) ")
 			if of - fitquality[numbuckets] > 1e-1
-				print("(check fails: $(@sprintf("%12.7g", of))")
+				print("(check fails: $(@sprintf("%12.7g", of))) ")
 			end
 			println("Robustness: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g", aic)) KS: $(@sprintf("%12.7g", kstest.δ)) StdDev: $(@sprintf("%12.7g", stddeverrors))")
 			continue
@@ -353,12 +353,14 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder errors[wellorder, :]]))
 		close(f)
 		
-		info("Histogram of the estimation errors:")
-		g = Gadfly.plot(x=vector_errors, Gadfly.Geom.histogram())
-		filename = "results/$(casestring)-$numbuckets-$retries-error_histogram.png"
-		Gadfly.draw(Gadfly.PNG(filename, 6Gadfly.inch, 4Gadfly.inch), g)
-		if isdefined(:madsdisplay)
-			madsdisplay(filename)
+		if VERSION < v"0.5"
+			info("Histogram of the estimation errors:")
+			g = Gadfly.plot(x=vector_errors, Gadfly.Geom.histogram())
+			filename = "results/$(casestring)-$numbuckets-$retries-error_histogram.png"
+			Gadfly.draw(Gadfly.PNG(filename, 6Gadfly.inch, 4Gadfly.inch), g)
+			if isdefined(:madsdisplay)
+				madsdisplay(filename)
+			end
 		end
 
 		indmaxerror = ind2sub(size(errors), indmax(abs(errors)))
@@ -403,12 +405,12 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		close(f)
 
 		info("Normalized buckets:")
-		for i=1:length(maxs1)
+		for i = 1:length(maxs1)
 			if maxs1[i] == mins1[i]
 				mins1[i] = 0
 			end
 		end
-		for i=1:length(maxs2)
+		for i = 1:length(maxs2)
 			if maxs2[i] == mins2[i]
 				mins2[i] = 0
 			end
@@ -425,14 +427,14 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		s2buckets = n2buckets[source_index,:]
 		display([uniquespecies[dataindex] s2buckets'])
 		bucketimpact = Array(Float64, numbuckets, numconstituents)
-		for s in 1:numconstituents
+		for s = 1:numconstituents
 			for i = 1:numbuckets
 				# bucketimpact[i, s] = sum(abs((spredictions[i][:, s])./predictions[:,s]))
 				bucketimpact[i, s] = sum(abs((spredictions[i][:, s])))
 			end
 		end
 		bucketimpactwells = Array(Float64, numbuckets, numwells)
-		for w in 1:numwells
+		for w = 1:numwells
 			for i = 1:numbuckets
 				# bucketimpactwells[i, w] = sum(abs((spredictions[i][w, :])./predictions[w,:]))
 				bucketimpactwells[i, w] = sum(abs((spredictions[i][w, :])))
@@ -446,7 +448,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		maxm = maximum(bucketimpact, 1)
 		minm = minimum(bucketimpact, 1)
 		display([uniquespecies[dataindex] maxm' minm'])
-		for i=1:length(maxm)
+		for i = 1:length(maxm)
 			if maxm[i] == minm[i]
 				minm[i] = 0
 			end
@@ -456,22 +458,24 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		maxiw = maximum(bucketimpactwells, 1)
 		miniw = minimum(bucketimpactwells, 1)
 		display([wellnameorder maxiw' miniw'])
-		for i=1:length(maxiw)
+		for i = 1:length(maxiw)
 			if maxiw[i] == miniw[i]
 				miniw[i] = 0
 			end
 		end
 
 		bucketimpactwells[source_index, wellorder] = (bucketimpactwells .- miniw) ./ (maxiw - miniw)
-		gmixers = Gadfly.spy(bucketimpactwells', Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
-					Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
-					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
-					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
-		# filename, format = Mads.setimagefileformat(filename, format)
-		filename = "results/$(casestring)-$numbuckets-$retries-bucketimpactwells.svg"
-		Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
-		filename = "results/$(casestring)-$numbuckets-$retries-bucketimpactwells.png"
-		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
+		if VERSION < v"0.5"
+			gmixers = Gadfly.spy(bucketimpactwells', Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
+						Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
+						Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
+						Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
+			# filename, format = Mads.setimagefileformat(filename, format)
+			filename = "results/$(casestring)-$numbuckets-$retries-bucketimpactwells.svg"
+			Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
+			filename = "results/$(casestring)-$numbuckets-$retries-bucketimpactwells.png"
+			Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
+		end
 
 		info("Ordered buckets normalized to capture the overall impact on the species concentrations:")
 		bucketimpact[source_index, dataindex] = (bucketimpact .- minm) ./ (maxm - minm)
@@ -594,7 +598,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		swm = map(i->rMF.mixers[5][goodindices,i] * rMF.buckets[5][i,selectedspecies], source_index)
 		for b = 1:numbuckets
 			for s = 1:length(selectedspecies)
-				z = swm[b][:, s]
+				z in swm[b][:, s]
 				zmin = minimum(z)
 				zmax = maximum(z)
 				current_species = uniquespecies[selectedspecies[s]]
@@ -633,7 +637,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 	end
 end
 
-function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::Bool=false, ns::Int=3, nw::Int=10, nc::Int=5, nd::Int=0)
+function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::Bool=false, ns::Int=3, nw::Int=10, nc::Int=5, nd::Int=0, nr::Int=0)
 	if noise
 		srand(2016)
 	end
@@ -769,7 +773,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		mixer_norm = diagm(1 ./ vec(sum(mixer, 2)))
 		global truemixer = mixer_norm * mixer
 		bucket = (rand(ns, nc) .* 2).^10
-		bucket_norm = diagm(1000 ./ vec(maximum(bucket, 1)))
+		bucket_norm = diagm(10 ./ vec(maximum(bucket, 1)))
 		global truebucket = bucket * bucket_norm
 		if noise
 			noise_matrix = randn(nw, nc + nd)
@@ -813,6 +817,8 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		info("Concentration matrix:")
 		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 		return
+	else
+		warn("File $filename is missing!")
 	end
 end
 
@@ -821,7 +827,7 @@ function getwellorder()
 	if isfile("data/cr-well-order-WE.dat")
 		wellnameorder = readdlm("data/cr-well-order-WE.dat")
 		wellorder = zeros(Int, length(wellnameorder))
-		for i in 1:length(wellorder)
+		for i = 1:length(wellorder)
 			if haskey(wells2i, wellnameorder[i])
 				wellorder[i] = wells2i[wellnameorder[i]]
 			end
@@ -982,7 +988,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	@assert length(names) == length(concs)
 	info("Total data record count $(length(longnames))")
 	# set the "cool" (short) variable names
-	for i in 1:length(longnames)
+	for i = 1:length(longnames)
 		if haskey(dict_species, longnames[i])
 			names[i] = dict_species[longnames[i]]
 		end
@@ -1105,7 +1111,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	info("Check species in the dictionary ...")
 	not_ok = false
 	uniquelongnames = unique(longnames)
-	for i in 1:length(uniquelongnames)
+	for i = 1:length(uniquelongnames)
 		if !haskey(dict_species, uniquelongnames[i])
 			not_ok = true
 			warn("Species name `$(uniquelongnames[i])` in the data set is not defined in the dictionary!")
@@ -1118,7 +1124,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	info("Check species in the data set ...")
 	not_ok = false
 	uniquespecies_long = collect(keys(dict_species))
-	for i in 1:length(uniquespecies_long)
+	for i = 1:length(uniquespecies_long)
 		if indexin([uniquespecies_long[i]], uniquelongnames)[1] == 0
 			not_ok = true
 			warn("Species name `$(uniquespecies_long[i])` defined in the dictionary is missing in the data set!")
@@ -1184,18 +1190,23 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		deltaindices = deltadependency
 		deltamatrix = Array(Float32, 0, 0)
 	end
-	for numbuckets = range
+	for numbuckets in range
 		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(concmatrix, retries, numbuckets; deltas=deltamatrix, deltaindices=deltaindices, ratios=ratios, mixmatch=mixmatch, normalize=normalize, scale=scale, matchwaterdeltas=matchwaterdeltas, mixtures=mixtures, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse, clusterweights=clusterweights)
 		mixsum = sum(mixers[numbuckets], 2)
 		checkone = collect(mixsum .< 0.9) | collect(mixsum .> 1.1)
 		index = find(checkone .== true)
 		if length(index) > 0
-			warn("The mixers rows do not add to 1")
+			warn("Mixer matrix rows do not add to 1")
 			display(mixsum)
 			@show mixers[numbuckets]
 			@show buckets[numbuckets]
 		end
-		println("Buckets: $(@sprintf("%2d", numbuckets)) Reconstruction: $(@sprintf("%12.7g", fitquality[numbuckets])) Robustness: $(@sprintf("%12.7g", robustness[numbuckets]))")
+		indexnan = isnan(datamatrix)
+		numobservations = length(vec(datamatrix[!indexnan]))
+		dof = numobservations - numbuckets
+		sml = dof + numobservations * (log(fitquality[numbuckets]/dof) / 2 + 1.837877)
+		aic = sml + 2 * numbuckets
+		println("Buckets: $(@sprintf("%2d", numbuckets)) Reconstruction: $(@sprintf("%12.7g", fitquality[numbuckets])) Robustness: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g", aic))")
 		if casekeyword == ""
 			filename = "results/$case-$numbuckets-$retries.jld"
 		else
@@ -1232,12 +1243,14 @@ info("rMF.loaddata(20151202) - original fingerprint data set")
 info("rMF.loaddata(20160202) - new fingerprint data set with pz wells")
 info("""rMF.loaddata(20160202; wellsset="01", speciesset="13")""")
 info("""rMF.loaddata("rdx-20160721")""")
-info("""rMF.loaddata("test56s5")""")
+info("""rMF.loaddata("test56s4")""")
 info("""rMF.loaddata("test", nw=6, nc=4, ns=3)""")
 info("")
 info("Have fun ...")
 
-# cd(Pkg.dir("rMF") * "/AquiferMixing")
+rmfdir = splitdir(splitdir(Base.source_path())[1])[1]
+cd(joinpath(rmfdir, "AquiferMixing"))
+# cd(joinpath(Pkg.dir("rMF"), "AquiferMixing"))
 
 # loaddata()
 
