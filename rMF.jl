@@ -776,26 +776,43 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		bucket_norm = diagm(10 ./ vec(maximum(bucket, 1)))
 		global truebucket = bucket * bucket_norm
 		if noise
-			noise_matrix = randn(nw, nc + nd)
+			noise_matrix = randn(nw, nc + nd + nr)
 		else
 			noise_matrix = 0
 		end
 		if nd > 0
+			if nd > nc
+				warn("Number of deltas cannot be larger than the number of concentrations!")
+				return
+			end
 			deltas = map(i->"δ" * string(Char(65 + (i-1)%26))^Int(ceil(i/26)), 1:nd)
 			global uniquespecies = vcat(uniquespecies, deltas)
 			global deltaindex = map(i->(nc + i), 1:nd)
 			global deltadependency = map(i->i, 1:nd)
 			global deltastandards = map(i->1, 1:nd)
-			global case = casename * "_" * string(nw) * "_" * string(nc) * "_" * string(ns)  * "_" * string(nd)
 			deltas = (rand(ns, nd) .* 2).^10
 			deltas_norm = diagm(10 ./ vec(maximum(deltas, 1)))
 			global truedeltas = deltas * deltas_norm
 			deltas = MixMatch.computedeltas(truemixer, truebucket, truedeltas, indexin(deltadependency, concindex))
 			global datamatrix = convert(Array{Float32,2}, hcat(truemixer * truebucket, deltas) + noise_matrix)
-		else
-			global case = casename * "_" * string(nw) * "_" * string(nc) * "_" * string(ns)
+		end
+		if nr > 0
+			if nr > nc - 1
+				warn("Number of deltas cannot be larger than the number of concentrations minus one!")
+				return
+			end
+			ratios = map(i->string(Char(65 + (i-1)%26))^Int(ceil(i/26)) * "/" * string(Char(65 + (i)%26))^Int(ceil(i/26)), 1:nr)
+			global uniquespecies = vcat(uniquespecies, ratios)
+			global ratioindex = map(i->(nc + i), 1:nr)
+			global ratiocomponents = [1:nr 2:nr+1]
+			global datamatrix = convert(Array{Float32,2}, truemixer * truebucket)	
+			global trueratios = map(Float32, (datamatrix[i,j] / datamatrix[i,j + 1]) for i=1:nw, j=1:nr)
+			global datamatrix = convert(Array{Float32,2}, hcat(datamatrix, trueratios) + noise_matrix)
+		end
+		if nd <= 0 && nr <=0
 			global datamatrix = convert(Array{Float32,2}, truemixer * truebucket + noise_matrix)
 		end
+		global case = casename * "_" * string(nw) * "_" * string(nc) * "_" * string(nd) * "_" * string(nr) * "_" * string(ns)
 		info("Concentration matrix:")
 		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 		return
