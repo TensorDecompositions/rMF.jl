@@ -122,7 +122,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			casestring = keyword
 		end
 	else
-		if case != "" 
+		if case != ""
 			if casekeyword != ""
 				casestring = case * "-" * casekeyword
 			else
@@ -159,7 +159,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			end
 			if length(ratioindex) > 0
 				index_list = setdiff(collect(values(order)), ratioindex)
-			else				
+			else
 				index_list = collect(values(order))
 			end
 			buckets[numbuckets] = buckets[numbuckets][:, index_list]
@@ -167,7 +167,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			error("Result file `$(filename)` is missing ...\nExecute `rMF.execute($numbuckets)` to get the results!")
 			continue
 		end
-		
+
 		wellorder, wellnameorder = getwellorder()
 
 		numwells = size(datamatrix, 1)
@@ -311,7 +311,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		f = open("results/$(casestring)-$numbuckets-$retries-predictions.dat", "w")
 		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder predictions[wellorder, :]]))
 		close(f)
-		
+
 		info("Predictions for each bucket:")
 		for i = 1:numbuckets
 			info("Predictions for bucket #$(i)")
@@ -331,7 +331,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 				MA[i] = Gadfly.render(Gadfly.spy(b[:,source_index], Gadfly.Guide.title(wellnameorder[i]),
 						Gadfly.Guide.xticks(orientation=:horizontal), Gadfly.Guide.yticks(orientation=:horizontal),
 						Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete(),
-						Gadfly.Guide.YLabel("", orientation=:vertical), Gadfly.Guide.XLabel("", orientation=:horizontal), 
+						Gadfly.Guide.YLabel("", orientation=:vertical), Gadfly.Guide.XLabel("", orientation=:horizontal),
 						Gadfly.Guide.colorkey(""),
 						Gadfly.Theme(key_position=:none, major_label_font_size=10Gadfly.pt, minor_label_font_size=8Gadfly.pt, key_title_font_size=10Gadfly.pt, key_label_font_size=8Gadfly.pt),
 						Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1)))
@@ -352,7 +352,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		f = open("results/$(casestring)-$numbuckets-$retries-errors.dat", "w")
 		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder errors[wellorder, :]]))
 		close(f)
-		
+
 		if VERSION < v"0.5"
 			info("Histogram of the estimation errors:")
 			g = Gadfly.plot(x=vector_errors, Gadfly.Geom.histogram())
@@ -370,13 +370,13 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		println("Error: $(errors[indmaxerror...])")
 		println("Relative error: $(relerrors[indmaxerror...])")
 		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[indmaxerror[1]] errors[indmaxerror[1]:indmaxerror[1], :]]))
-		
+
 		info("Relative match errors:")
 		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder relerrors[wellorder, :]]))
 		f = open("results/$(casestring)-$numbuckets-$retries-relerrors.dat", "w")
 		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder relerrors[wellorder, :]]))
 		close(f)
-		
+
 		indmaxerror = ind2sub(size(relerrors), indmax(abs(relerrors)))
 		info("The largest absolute relative match error is for $(wellnameorder[indmaxerror[1]]) / $(uniquespecies[indmaxerror[2]]).")
 		println("Observation: $(datamatrix[indmaxerror...])")
@@ -384,20 +384,20 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		println("Error: $(errors[indmaxerror...])")
 		println("Relative error: $(relerrors[indmaxerror...])")
 		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[indmaxerror[1]] relerrors[indmaxerror[1]:indmaxerror[1], :]]))
-		
+
 		info("Max/min Species in Buckets per species:")
 		maxs1 = maximum(orderedbuckets, 1)
 		mins1 = minimum(orderedbuckets, 1)
 		display([uniquespecies[dataindex] maxs1' mins1'])
-		
+
 		info("Max/min Species in Buckets per buckets:")
 		maxs2 = maximum(orderedbuckets, 2)
 		mins2 = minimum(orderedbuckets, 2)
 		display([maxs2 mins2])
-		
+
 		info("Mixers:")
 		display([uniquewells mixers[numbuckets]])
-		
+
 		info("Buckets:")
 		display([uniquespecies[dataindex] orderedbuckets[source_index,:]'])
 		f = open("results/$(casestring)-$numbuckets-$retries-buckets.dat", "w")
@@ -417,11 +417,11 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		end
 		nbuckets = (orderedbuckets .- mins1) ./ (maxs1 - mins1)
 		display([uniquespecies[dataindex] nbuckets[source_index,:]'])
-		
+
 		info("Ordered buckets normalized by (max/min species) the overall species dominance:")
 		s1buckets = nbuckets[source_index,:]
 		display([uniquespecies[dataindex] s1buckets'])
-		
+
 		info("Ordered buckets normalized by (max/min buckets) species dominance within each bucket:")
 		n2buckets = (orderedbuckets .- mins2) ./ (maxs2 - mins2)
 		s2buckets = n2buckets[source_index,:]
@@ -440,10 +440,10 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 				bucketimpactwells[i, w] = sum(abs((spredictions[i][w, :])))
 			end
 		end
-		
+
 		info("Ordered buckets to capture the overall impact on the species concentrations:")
 		display([uniquespecies[dataindex] bucketimpact[source_index, dataindex]'])
-		
+
 		info("Max/min Species in model predictions for each bucket:")
 		maxm = maximum(bucketimpact, 1)
 		minm = minimum(bucketimpact, 1)
@@ -568,7 +568,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		zi = Array(Float64, length(xi), length(yi))
 		wm = mixers[numbuckets][goodindices,source_index]
 		for s = 1:numbuckets
-			z = wm[:, s] 
+			z = wm[:, s]
 			z[z.<1e-6] = 1e-6
 			z = log10(z)
 			@assert length(wc[:,1]) == length(z)
@@ -769,12 +769,18 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		global concindex = collect(1:nc)
 		global dataindex = collect(1:(nc+nd))
 		global wellcoord = []
-		mixer = (rand(nw, ns) .* 2).^10
+		mixer = rand(nw, ns)
+		# mixer = (mixer .* 2).^10
 		mixer_norm = diagm(1 ./ vec(sum(mixer, 2)))
 		global truemixer = mixer_norm * mixer
-		bucket = (rand(ns, nc) .* 2).^10
-		bucket_norm = diagm(10 ./ vec(maximum(bucket, 1)))
+		display(truemixer)
+		global truemixer = truemixer ./(sum(truemixer, 2))
+		display(truemixer)
+		bucket = rand(ns, nc)
+		# bucket = (bucket .* 2).^4
+		bucket_norm = diagm(1 ./ vec(maximum(bucket, 1)))
 		global truebucket = bucket * bucket_norm
+		display(truebucket)
 		if noise
 			noise_matrix = randn(nw, nc + nd + nr)
 		else
@@ -805,7 +811,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 			global uniquespecies = vcat(uniquespecies, ratios)
 			global ratioindex = map(i->(nc + i), 1:nr)
 			global ratiocomponents = [1:nr 2:nr+1]'
-			global datamatrix = convert(Array{Float32,2}, truemixer * truebucket)	
+			global datamatrix = convert(Array{Float32,2}, truemixer * truebucket)
 			global trueratios = map(Float32, (datamatrix[i,j] / datamatrix[i,j + 1]) for i=1:nw, j=1:nr)
 			global datamatrix = convert(Array{Float32,2}, hcat(datamatrix, trueratios) + noise_matrix)
 		end
@@ -1070,9 +1076,9 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 			sdmatrix[i, j] += concs[index] * concs[index]
 		end
 	end
-	
+
 	wellorder, wellnameorder = getwellorder()
-	
+
 	info("Species ($(length(uniquespecies)))")
 	display(uniquespecies)
 	info("Wells ($(length(wellnameorder)))")
@@ -1083,12 +1089,12 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	display([wellnameorder sum(datacount,2)[wellorder]])
 	info("Observations per species:")
 	display([uniquespecies sum(datacount,1)'])
-	
+
 	sdmatrix = sqrt(abs(sdmatrix - (datamatrix .^2) ./ datacount))
 	sdmatrix[isnan(sdmatrix)] = 0
 	sdmatrix[datacount.==1] = 0
 	global datamatrix = convert(Array{Float32,2}, datamatrix ./ datacount) # gives NaN if there is no data, otherwise divides by the number of results
-	
+
 	info("Concentration matrix:")
 	display([transposevector(["Wells"; uniquespecies]); wellnameorder datamatrix[wellorder,:]])
 	info("Concentration standard deviation matrix:")
@@ -1137,7 +1143,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	if !not_ok
 		println("ok")
 	end
-	
+
 	info("Check species in the data set ...")
 	not_ok = false
 	uniquespecies_long = collect(keys(dict_species))
@@ -1209,7 +1215,7 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		deltamatrix = Array(Float32, 0, 0)
 	end
 	for numbuckets in range
-		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(concmatrix, retries, numbuckets; deltas=deltamatrix, deltaindices=deltaindices, ratios=ratios, mixmatch=mixmatch, normalize=normalize, scale=scale, matchwaterdeltas=matchwaterdeltas, mixtures=mixtures, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse, clusterweights=clusterweights)
+		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(concmatrix, retries, numbuckets; deltas=deltamatrix, deltaindices=deltaindices, ratios=ratiomatrix, ratioindices=ratiocomponents, mixmatch=mixmatch, normalize=normalize, scale=scale, matchwaterdeltas=matchwaterdeltas, mixtures=mixtures, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse, clusterweights=clusterweights)
 		mixsum = sum(mixers[numbuckets], 2)
 		checkone = collect(mixsum .< 0.9) | collect(mixsum .> 1.1)
 		index = find(checkone .== true)
