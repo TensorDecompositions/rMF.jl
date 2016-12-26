@@ -804,7 +804,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 			ratios = map(i->string(Char(65 + (i-1)%26))^Int(ceil(i/26)) * "/" * string(Char(65 + (i)%26))^Int(ceil(i/26)), 1:nr)
 			global uniquespecies = vcat(uniquespecies, ratios)
 			global ratioindex = map(i->(nc + i), 1:nr)
-			global ratiocomponents = [1:nr 2:nr+1]
+			global ratiocomponents = [1:nr 2:nr+1]'
 			global datamatrix = convert(Array{Float32,2}, truemixer * truebucket)	
 			global trueratios = map(Float32, (datamatrix[i,j] / datamatrix[i,j + 1]) for i=1:nw, j=1:nr)
 			global datamatrix = convert(Array{Float32,2}, hcat(datamatrix, trueratios) + noise_matrix)
@@ -1155,13 +1155,13 @@ end
 """
 Perform rMF analyses
 """
-function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtures::Bool=true, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, matchwaterdeltas::Bool=false, quiet::Bool=true, clusterweights::Bool=true, convertdeltas::Bool=true)
+function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtures::Bool=true, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, matchwaterdeltas::Bool=false, quiet::Bool=true, clusterweights::Bool=true, convertdeltas::Bool=true, ignoreratios::Bool=false)
 	if sizeof(datamatrix) == 0
 		warn("Execute `rMF.loaddata()` first!")
 		return
 	end
 	concmatrix = datamatrix
-	if length(ratioindex) > 0
+	if length(ratioindex) > 0 && !ignoreratios
 		concmatrix = datamatrix[:, concindex]
 		ratiomatrix = datamatrix[:, ratioindex]
 		nummixtures = size(concmatrix, 1)
@@ -1175,7 +1175,8 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 			for j = 1:size(ratiocomponents, 2)
 				a = ratiocomponents[1, j]
 				b = ratiocomponents[2, j]
-				ratios[i, a, b] = ratiomatrix[i]
+				ratios[i, a, b] = ratiomatrix[i,j] # upper triangle (not needed; added for completeness)
+				ratios[i, b, a] = ratiomatrix[i,j] # lower triangle (currently used in MixMatch)
 			end
 		end
 	else
