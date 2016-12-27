@@ -17,19 +17,13 @@ import Images
 import Compat
 import Compat.AbstractString
 
+@PyCall.pyimport matplotlib.patheffects as PathEffects
+
 if isfile(Pkg.dir("Mads") * "/scripts/madsdisplay.jl")
 	include(Pkg.dir("Mads") * "/scripts/madsdisplay.jl")
 end
 
-@PyCall.pyimport matplotlib.patheffects as PathEffects
-
-function transposevector(a)
-	reshape(a, 1, length(a))
-end
-
-function transposematrix(a)
-	permutedims(a, (2, 1))
-end
+include("rMFtranspose.jl")
 
 maxbuckets = 10
 case = ""
@@ -114,6 +108,7 @@ info("Use `rMF.execute(5, retries=50)` to compute the results for the 5 bucket c
 info("Use `rMF.getresults(5, retries=50)` to get the results for the 5 bucket case.")
 info("Use `rMF.getresults(5:8, retries=50; brief=true)` to see the results for bucket cases 5 to 8.")
 
+"Retrieve saved rMF results"
 function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::AbstractString=""; retries::Int=10, brief::Bool=false)
 	if keyword != ""
 		if case != "" && !contains(keyword, case)
@@ -637,6 +632,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 	end
 end
 
+"Load data for rMF analysis"
 function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::Bool=false, ns::Int=3, nw::Int=10, nc::Int=5, nd::Int=0, nr::Int=0)
 	if noise
 		srand(2016)
@@ -845,6 +841,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 	end
 end
 
+"Get well order"
 function getwellorder()
 	wells2i = Dict(zip(uniquewells, 1:length(uniquewells)))
 	if isfile("data/cr-well-order-WE.dat")
@@ -873,6 +870,7 @@ function getwellorder()
 	return wellorder, wellnameorder
 end
 
+"Display rMF data"
 function displayconc(name::AbstractString)
 	wellorder, wellnameorder = getwellorder()
 	if name == ""
@@ -892,6 +890,7 @@ function displayconc(name::AbstractString)
 	end
 end
 
+"Load data for rMF analysis"
 function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsset::AbstractString="", speciesset::AbstractString="")
 	casestring = keyword
 	if wellsset != ""
