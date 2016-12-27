@@ -769,14 +769,11 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		# mixer = (mixer .* 2).^10
 		mixer_norm = diagm(1 ./ vec(sum(mixer, 2)))
 		global truemixer = mixer_norm * mixer
-		display(truemixer)
 		global truemixer = truemixer ./(sum(truemixer, 2))
-		display(truemixer)
 		bucket = rand(ns, nc)
 		# bucket = (bucket .* 2).^4
 		bucket_norm = diagm(1 ./ vec(maximum(bucket, 1)))
 		global truebucket = bucket * bucket_norm
-		display(truebucket)
 		if noise
 			noise_matrix = randn(nw, nc + nd + nr)
 		else
@@ -1185,7 +1182,8 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 			end
 		end
 	else
-		ratios = nothing
+		ratiomatrix = nothing
+		global ratiocomponents = Array(Int, 0, 0)
 	end
 	if length(deltaindex) > 0
 		concmatrix = datamatrix[:, concindex]
