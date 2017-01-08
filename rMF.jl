@@ -804,7 +804,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		bucket_norm = diagm(1 ./ vec(maximum(bucket, 1)))
 		global truebucket = bucket * bucket_norm
 		if noise
-			noise_matrix = randn(nw, nc + nd + nr)
+			noise_matrix = randn(nw, nc + nd + nr) / 100
 		else
 			noise_matrix = 0
 		end
