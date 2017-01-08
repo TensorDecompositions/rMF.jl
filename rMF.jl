@@ -666,9 +666,6 @@ end
 
 "Load data for rMF analysis"
 function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::Bool=false, ns::Int=3, nw::Int=10, nc::Int=5, nd::Int=0, nr::Int=0, quiet::Bool=false)
-	if noise
-		srand(2016)
-	end
 	global case = casename
 	global casekeyword = keyword
 	global mixers = Array(Array{Float64, 2}, maxbuckets)
