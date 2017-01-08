@@ -32,6 +32,7 @@ mixers = Array(Array{Float64, 2}, maxbuckets)
 buckets = Array(Array{Float64, 2}, maxbuckets)
 fitquality = Array(Float64, maxbuckets)
 robustness = Array(Float64, maxbuckets)
+aic = Array(Float64, maxbuckets)
 deltadependency = Int[]
 dict_species = Dict()
 uniquewells = []
@@ -199,8 +200,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 				spredictions[i] = mixers[numbuckets][:,i:i] * buckets[numbuckets][i:i,:]
 			end
 		end
-		if length(ratioindex) > 0
-			info("Compute ratios:")
+		if length(ratioindex) > 0 # Compute ratios
 			p = similar(datamatrix)
 			p[:, concindex] = predictions
 			for i = 1:numwells
@@ -211,9 +211,9 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 				end
 			end
 			predictions = p
-			for i = 1:numbuckets
+			for k = 1:numbuckets
 				p = similar(datamatrix)
-				p[:, concindex] = spredictions[i]
+				p[:, concindex] = spredictions[k]
 				for i = 1:numwells
 					for j = 1:size(ratiocomponents, 2)
 						a = ratiocomponents[1, j]
@@ -221,7 +221,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 						p[i, ratioindex[j]] = p[i, a] / p[i, b]
 					end
 				end
-				spredictions[i] = p
+				spredictions[k] = p
 			end
 		end
 
@@ -242,12 +242,19 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		sml = dof + numobservations * (log(fitquality[numbuckets]/dof) / 2 + 1.837877)
 		aic = sml + 2 * numbuckets
 		stddeverrors = std(vector_errors)
-		kstest = HypothesisTests.ExactOneSampleKSTest(vector_errors, Distributions.Normal(0, stddeverrors))
-		pval = HypothesisTests.pvalue(kstest)
-		if kstest.δ > pval
-			vertdict = "not normal"
+		if stddeverrors > 0
+			kstest = HypothesisTests.ExactOneSampleKSTest(vector_errors, Distributions.Normal(0, stddeverrors))
+			kstestdelta = kstest.δ
+			kstestpval = HypothesisTests.pvalue(kstest)
+			if kstestdelta > kstestpval
+				kstestvertdict = "not normal"
+			else
+				kstestvertdict = "normal"
+			end
 		else
-			vertdict = "normal"
+			kstestdelta = 0
+			kstestpval = Inf
+			kstestvertdict = "unknown"
 		end
 
 		f = open("results/$(casestring)-$numbuckets-$retries-stats.dat", "w")
@@ -256,7 +263,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		println(f, "* Reconstruction: $(fitquality[numbuckets])")
 		println(f, "* Reconstruction check: $(of)")
 		println(f, "* Robustness: $(robustness[numbuckets])")
-		println(f, "* KS Test: $vertdict ($(kstest.δ) $(pval))")
+		println(f, "* KS Test: $kstestvertdict ($(kstestdelta) $(kstestpval))")
 		println(f, "* AIC: $(aic)")
 		println(f, "* Error stats: $(aic)")
 		println(f, "  - Mean: $(mean(vector_errors))")
@@ -273,7 +280,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			if of - fitquality[numbuckets] > 1e-1
 				print("(check fails: $(@sprintf("%12.7g", of))) ")
 			end
-			println("Robustness: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g", aic)) KS: $(@sprintf("%12.7g", kstest.δ)) StdDev: $(@sprintf("%12.7g", stddeverrors))")
+			println("Robustness: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g", aic)) KS: $(@sprintf("%12.7g", kstestdelta)) StdDev: $(@sprintf("%12.7g", stddeverrors))")
 			continue
 		else
 			info("Fit quality: $(fitquality[numbuckets]) (check = $(of)) (regularization penalty = $(regularization_penalty))")
@@ -284,7 +291,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		end
 
 		info("Match error statistics:")
-		println("KS Test: $vertdict ($(kstest.δ) $(pval))")
+		println("KS Test: $kstestvertdict ($(kstestdelta) $(kstestpval))")
 		println("AIC: $(aic)")
 		println("Mean: $(mean(vector_errors))")
 		println("Variance: $(var(vector_errors))")
@@ -442,7 +449,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		info("Max/min Species in model predictions for each bucket:")
 		maxm = maximum(bucketimpact, 1)
 		minm = minimum(bucketimpact, 1)
-		display([uniquespecies[dataindex] maxm' minm'])
+		display([uniquespecies maxm' minm'])
 		for i = 1:length(maxm)
 			if maxm[i] == minm[i]
 				minm[i] = 0
@@ -473,29 +480,31 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		end
 
 		info("Ordered buckets normalized to capture the overall impact on the species concentrations:")
-		bucketimpact[source_index, dataindex] = (bucketimpact .- minm) ./ (maxm - minm)
-		display([uniquespecies[dataindex] bucketimpact'])
+		bucketimpact[source_index, :] = (bucketimpact .- minm) ./ (maxm - minm)
+		display([uniquespecies bucketimpact'])
 
-		gbucket = Gadfly.spy(bucketimpact', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
-					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
-					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
-					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
-		# filename, format = Mads.setimagefileformat(filename, format)
-		filename = "results/$(casestring)-$numbuckets-$retries-bucketimpact.svg"
-		Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
-		filename = "results/$(casestring)-$numbuckets-$retries-bucketimpact.png"
-		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
+		if VERSION < v"0.5"
+			gbucket = Gadfly.spy(bucketimpact', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
+						Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
+						Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
+						Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
+			# filename, format = Mads.setimagefileformat(filename, format)
+			filename = "results/$(casestring)-$numbuckets-$retries-bucketimpact.svg"
+			Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
+			filename = "results/$(casestring)-$numbuckets-$retries-bucketimpact.png"
+			Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
 
-		# s1buckets[s1buckets.<1e-6] = 1e-6
-		gbucket = Gadfly.spy(s1buckets', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
-					Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
-					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
-					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
-		# filename, format = Mads.setimagefileformat(filename, format)
-		filename = "results/$(casestring)-$numbuckets-$retries-buckets.svg"
-		Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
-		filename = "results/$(casestring)-$numbuckets-$retries-buckets.png"
-		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
+			# s1buckets[s1buckets.<1e-6] = 1e-6
+			gbucket = Gadfly.spy(s1buckets', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
+						Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
+						Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
+						Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
+			# filename, format = Mads.setimagefileformat(filename, format)
+			filename = "results/$(casestring)-$numbuckets-$retries-buckets.svg"
+			Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
+			filename = "results/$(casestring)-$numbuckets-$retries-buckets.png"
+			Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
+		end
 
 #=
 		gbucket = Gadfly.spy(s2buckets', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
@@ -527,16 +536,17 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			display([wellnameorder truemixer])
 		end
 
-
-		gmixers = Gadfly.spy(smixers, Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
-					Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
-					Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
-					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
-		# filename, format = Mads.setimagefileformat(filename, format)
-		filename = "results/$(casestring)-$numbuckets-$retries-mixers.svg"
-		Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
-		filename = "results/$(casestring)-$numbuckets-$retries-mixers.png"
-		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
+		if VERSION < v"0.5"
+			gmixers = Gadfly.spy(smixers, Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
+						Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
+						Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
+						Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
+			# filename, format = Mads.setimagefileformat(filename, format)
+			filename = "results/$(casestring)-$numbuckets-$retries-mixers.svg"
+			Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
+			filename = "results/$(casestring)-$numbuckets-$retries-mixers.png"
+			Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
+		end
 
 		if !isdefined(:wellcoord)
 			continue
@@ -633,7 +643,29 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 end
 
 "Load data for rMF analysis"
-function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::Bool=false, ns::Int=3, nw::Int=10, nc::Int=5, nd::Int=0, nr::Int=0)
+function check(casename::AbstractString, numruns::Int=100, keyword::AbstractString=""; noise::Bool=false, ns::Int=3, nw::Int=10, nc::Int=5, nd::Int=0, nr::Int=0)
+	nb = max(ns, nc+nr+nd)
+	numberofsourcesrobustness = Array(Int64, numruns)
+	numberofsourcesaic = Array(Int64, numruns)
+	for i = 1:numruns
+		info("$i")
+		loaddata(casename, keyword; noise = noise, ns = ns, nw = nw, nc = nc, nd = nd, nr = nr, quiet = true)
+		execute(1:nb, nooutput = true)
+		# getresults(1:nb, brief = true)
+		numberofsourcesaic[i] = indmax(abs(aic[1:nb-1] - aic[2:nb]))+1
+		numberofsourcesrobustness[i] = indmax(robustness[1:nb-1] - robustness[2:nb])
+	end
+	# @show numberofsourcesrobustness
+	# @show numberofsourcesaic
+	caic = count(i->numberofsourcesaic[i].==ns, 1:numruns)
+	crob = count(i->numberofsourcesrobustness[i].==ns, 1:numruns)
+	info("Correct (AIC) = $caic/$numruns")
+	info("Correct (Robustness) = $crob/$numruns")
+	return
+end
+
+"Load data for rMF analysis"
+function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::Bool=false, ns::Int=3, nw::Int=10, nc::Int=5, nd::Int=0, nr::Int=0, quiet::Bool=false)
 	if noise
 		srand(2016)
 	end
@@ -656,8 +688,8 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		global dataindex = collect(1:size(datamatrix, 2))
 		global concindex = setdiff(dataindex, deltaindex)
 		global wellcoord = [[0., 0.] [0., 100.]]
-		info("Concentration matrix:")
-		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
+		!quiet && info("Concentration matrix:")
+		!quiet && display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 		return
 	end
 	if casename == "test23delta2"
@@ -669,8 +701,8 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		global dataindex = collect(1:size(datamatrix, 2))
 		global concindex = setdiff(dataindex, deltaindex)
 		global wellcoord = [[0., 0.] [0., 100.]]
-		info("Concentration matrix:")
-		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
+		!quiet && info("Concentration matrix:")
+		!quiet && display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 		return
 	end
 	if casename == "test23ratio"
@@ -682,8 +714,8 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		global concindex = setdiff(collect(1:size(datamatrix,2)), ratioindex)
 		global dataindex = concindex
 		global wellcoord = [[0., 0.] [0., 100.]]
-		info("Concentration matrix:")
-		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
+		!quiet && info("Concentration matrix:")
+		!quiet && display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 		return
 	end
 	if casename == "test23"
@@ -693,8 +725,8 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		global concindex = collect(1:size(datamatrix,2))
 		global dataindex = concindex
 		global wellcoord = [[0., 0.] [0., 100.]]
-		info("Concentration matrix:")
-		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
+		!quiet && info("Concentration matrix:")
+		!quiet && display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 		return
 	end
 	if casename == "test56s3"
@@ -717,8 +749,8 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		global concindex = collect(1:size(datamatrix,2))
 		global dataindex = concindex
 		global wellcoord = [[0., 0.] [0., 100.] [50., 50.] [0., 50.] [50., 0.]]
-		info("Concentration matrix:")
-		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
+		!quiet && info("Concentration matrix:")
+		!quiet && display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 		return
 	end
 	if casename == "test56s4"
@@ -742,8 +774,8 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		global concindex = collect(1:size(datamatrix,2))
 		global dataindex = concindex
 		global wellcoord = [[0., 0.] [0., 100.] [50., 50.] [0., 50.] [50., 0.]]
-		info("Concentration matrix:")
-		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
+		!quiet && info("Concentration matrix:")
+		!quiet && display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 		return
 	end
 	if casename == "test"
@@ -812,8 +844,8 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 			global datamatrix = convert(Array{Float32,2}, truemixer * truebucket + noise_matrix)
 		end
 		global case = casename * "_" * string(nw) * "_" * string(nc) * "_" * string(nd) * "_" * string(nr) * "_" * string(ns)
-		info("Concentration matrix:")
-		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
+		!quiet && info("Concentration matrix:")
+		!quiet && display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 		return
 	end
 	filename = "data/" * casename * ".csv"
@@ -830,8 +862,8 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		display(uniquespecies)
 		info("Wells ($(length(uniquewells)))")
 		display(uniquewells)
-		info("Concentration matrix:")
-		display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
+		!quiet && info("Concentration matrix:")
+		!quiet && display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 		return
 	else
 		warn("File $filename is missing!")
@@ -888,7 +920,7 @@ function displayconc(name::AbstractString)
 end
 
 "Load data for rMF analysis"
-function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsset::AbstractString="", speciesset::AbstractString="")
+function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsset::AbstractString="", speciesset::AbstractString="", quiet::Bool=false)
 	casestring = keyword
 	if wellsset != ""
 		if casestring != ""
@@ -1091,13 +1123,13 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	sdmatrix[datacount.==1] = 0
 	global datamatrix = convert(Array{Float32,2}, datamatrix ./ datacount) # gives NaN if there is no data, otherwise divides by the number of results
 
-	info("Concentration matrix:")
-	display([transposevector(["Wells"; uniquespecies]); wellnameorder datamatrix[wellorder,:]])
-	info("Concentration standard deviation matrix:")
-	display([transposevector(["Wells"; uniquespecies]); wellnameorder sdmatrix[wellorder,:]])
+	!quiet && info("Concentration matrix:")
+	!quiet && display([transposevector(["Wells"; uniquespecies]); wellnameorder datamatrix[wellorder,:]])
+	!quiet && info("Concentration standard deviation matrix:")
+	!quiet && display([transposevector(["Wells"; uniquespecies]); wellnameorder sdmatrix[wellorder,:]])
 
-	info("Maximum standard deviation for various species:")
-	display([uniquespecies maximum(sdmatrix, 1)'])
+	!quiet && info("Maximum standard deviation for various species:")
+	!quiet && display([uniquespecies maximum(sdmatrix, 1)'])
 	sdmatrix2 = deepcopy(sdmatrix)
 	mmm = Inf
 	for i = 1:20
@@ -1157,7 +1189,7 @@ end
 """
 Perform rMF analyses
 """
-function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtures::Bool=true, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, matchwaterdeltas::Bool=false, quiet::Bool=true, clusterweights::Bool=true, convertdeltas::Bool=true, ignoreratios::Bool=false)
+function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtures::Bool=true, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, matchwaterdeltas::Bool=false, quiet::Bool=true, clusterweights::Bool=true, convertdeltas::Bool=true, ignoreratios::Bool=false, nooutput::Bool=false)
 	if sizeof(datamatrix) == 0
 		warn("Execute `rMF.loaddata()` first!")
 		return
@@ -1168,10 +1200,10 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		ratiomatrix = datamatrix[:, ratioindex]
 		nummixtures = size(concmatrix, 1)
 		numconstituents = size(concmatrix, 2)
-		info("Mixtures matrix:")
-		display([transposevector(["Wells"; uniquespecies[concindex]]); uniquewells concmatrix])
-		info("Ratio matrix:")
-		display([transposevector(["Wells"; uniquespecies[ratioindex]]); uniquewells ratiomatrix])
+		!nooutput && info("Mixtures matrix:")
+		!nooutput && display([transposevector(["Wells"; uniquespecies[concindex]]); uniquewells concmatrix])
+		!nooutput && info("Ratio matrix:")
+		!nooutput && display([transposevector(["Wells"; uniquespecies[ratioindex]]); uniquewells ratiomatrix])
 		ratios = convert(Array{Float32, 3}, fill(NaN, nummixtures, numconstituents, numconstituents))
 		for i = 1:nummixtures
 			for j = 1:size(ratiocomponents, 2)
@@ -1189,21 +1221,21 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		concmatrix = datamatrix[:, concindex]
 		deltamatrix = datamatrix[:, deltaindex]
 		deltaindices = indexin(deltadependency, concindex)
-		info("Mixtures matrix:")
-		display([transposevector(["Wells"; uniquespecies[concindex]]); uniquewells concmatrix])
-		info("Delta matrix:")
-		display([transposevector(["Wells"; uniquespecies[deltaindex]]); uniquewells deltamatrix])
+		!nooutput && info("Mixtures matrix:")
+		!nooutput && display([transposevector(["Wells"; uniquespecies[concindex]]); uniquewells concmatrix])
+		!nooutput && info("Delta matrix:")
+		!nooutput && display([transposevector(["Wells"; uniquespecies[deltaindex]]); uniquewells deltamatrix])
 		if convertdeltas
 			isotopeconcentrations = MixMatch.getisotopeconcentration(deltamatrix, deltastandards, datamatrix[:, deltadependency])
-			info("Converted delta matrix to concentrations:")
-			display([transposevector(["Wells"; uniquespecies[deltaindex]]); uniquewells isotopeconcentrations])
+			!nooutput && info("Converted delta matrix to concentrations:")
+			!nooutput && display([transposevector(["Wells"; uniquespecies[deltaindex]]); uniquewells isotopeconcentrations])
 			deltas = MixMatch.getisotopedelta(isotopeconcentrations, deltastandards, datamatrix[:, deltadependency])
-			info("Converted stable isotope concentrations back to deltas (test):")
-			display([transposevector(["Wells"; uniquespecies[deltaindex]]); uniquewells deltas])
+			!nooutput && info("Converted stable isotope concentrations back to deltas (test):")
+			!nooutput && display([transposevector(["Wells"; uniquespecies[deltaindex]]); uniquewells deltas])
 			concmatrix = copy(datamatrix)
 			concmatrix[:, deltaindex] = isotopeconcentrations
-			info("Concentration matrix:")
-			display([transposevector(["Wells"; uniquespecies]); uniquewells concmatrix])
+			!nooutput && info("Concentration matrix:")
+			!nooutput && display([transposevector(["Wells"; uniquespecies]); uniquewells concmatrix])
 			deltaindices = deltadependency
 			deltamatrix = Array(Float32, 0, 0)
 		end
@@ -1226,8 +1258,8 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		numobservations = length(vec(datamatrix[!indexnan]))
 		dof = numobservations - numbuckets
 		sml = dof + numobservations * (log(fitquality[numbuckets]/dof) / 2 + 1.837877)
-		aic = sml + 2 * numbuckets
-		println("Buckets: $(@sprintf("%2d", numbuckets)) Reconstruction: $(@sprintf("%12.7g", fitquality[numbuckets])) Robustness: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g", aic))")
+		aic[numbuckets] = sml + 2 * numbuckets
+		println("Buckets: $(@sprintf("%2d", numbuckets)) Reconstruction: $(@sprintf("%12.7g", fitquality[numbuckets])) Robustness: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g", aic[numbuckets]))")
 		if casekeyword == ""
 			filename = "results/$case-$numbuckets-$retries.jld"
 		else
@@ -1253,7 +1285,7 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 				display([uniquewells truemixer])
 			end
 		end
-		JLD.save(filename, "wells", uniquewells, "species", uniquespecies, "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets], "regularizationweight", regularizationweight)
+		JLD.save(filename, "wells", uniquewells, "species", uniquespecies, "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets], "aic", aic[numbuckets], "regularizationweight", regularizationweight)
 	end
 	return
 end
