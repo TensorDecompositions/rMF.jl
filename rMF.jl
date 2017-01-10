@@ -800,7 +800,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		# mixer = (mixer .* 2).^10
 		mixer_norm = diagm(1 ./ vec(sum(mixer, 2)))
 		global truemixer = mixer_norm * mixer
-		global truemixer = truemixer ./(sum(truemixer, 2))
+		global truemixer = truemixer ./ (sum(truemixer, 2))
 		bucket = rand(ns, nc)
 		# bucket = (bucket .* 2).^4
 		bucket_norm = diagm(1 ./ vec(maximum(bucket, 1)))
@@ -820,11 +820,13 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 			global deltaindex = map(i->(nc + i), 1:nd)
 			global deltadependency = map(i->i, 1:nd)
 			global deltastandards = map(i->1, 1:nd)
-			deltas = (rand(ns, nd) .* 2).^10
-			deltas_norm = diagm(10 ./ vec(maximum(deltas, 1)))
+			# deltas = (rand(ns, nd) .* 2).^10
+			deltas = rand(ns, nd)
+			deltas_norm = diagm(1 ./ vec(maximum(deltas, 1)))
 			global truedeltas = deltas * deltas_norm
 			deltas = MixMatch.computedeltas(truemixer, truebucket, truedeltas, indexin(deltadependency, concindex))
 			global datamatrix = convert(Array{Float32,2}, hcat(truemixer * truebucket, deltas) + noise_matrix)
+			datamatrix[:,1:nd] = NaN
 		end
 		if nr > 0
 			if nr > nc - 1
@@ -838,6 +840,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 			global datamatrix = convert(Array{Float32,2}, truemixer * truebucket)
 			global trueratios = map(Float32, (datamatrix[i,j] / datamatrix[i,j + 1]) for i=1:nw, j=1:nr)
 			global datamatrix = convert(Array{Float32,2}, hcat(datamatrix, trueratios) + noise_matrix)
+			datamatrix[:,1:nr+1] = NaN
 		end
 		if nd <= 0 && nr <=0
 			global datamatrix = convert(Array{Float32,2}, truemixer * truebucket + noise_matrix)
