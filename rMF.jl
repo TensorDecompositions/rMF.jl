@@ -645,6 +645,7 @@ end
 "Load data for rMF analysis"
 function check(casename::AbstractString, numruns::Int=100, keyword::AbstractString=""; noise::Bool=false, ns::Int=3, nw::Int=10, nc::Int=5, nd::Int=0, nr::Int=0)
 	nb = max(ns, nc+nr+nd)
+	numberofsourcesreconstruction = Array(Int64, numruns)
 	numberofsourcesrobustness = Array(Int64, numruns)
 	numberofsourcesaic = Array(Int64, numruns)
 	for i = 1:numruns
@@ -652,15 +653,16 @@ function check(casename::AbstractString, numruns::Int=100, keyword::AbstractStri
 		loaddata(casename, keyword; noise = noise, ns = ns, nw = nw, nc = nc, nd = nd, nr = nr, quiet = true)
 		execute(1:nb, nooutput = true)
 		# getresults(1:nb, brief = true)
-		numberofsourcesaic[i] = indmax(abs(aic[1:nb-1] - aic[2:nb]))+1
+		numberofsourcesreconstruction[i] = indmax(fitquality[1:nb-1] - fitquality[2:nb]) + 1
 		numberofsourcesrobustness[i] = indmax(robustness[1:nb-1] - robustness[2:nb])
+		numberofsourcesaic[i] = indmax(abs(aic[1:nb-1] - aic[2:nb])) + 1
 	end
-	# @show numberofsourcesrobustness
-	# @show numberofsourcesaic
-	caic = count(i->numberofsourcesaic[i].==ns, 1:numruns)
+	cfit = count(i->numberofsourcesreconstruction[i].==ns, 1:numruns)
 	crob = count(i->numberofsourcesrobustness[i].==ns, 1:numruns)
-	info("Correct (AIC) = $caic/$numruns")
+	caic = count(i->numberofsourcesaic[i].==ns, 1:numruns)
+	info("Correct (Reconstruction) = $cfit/$numruns")
 	info("Correct (Robustness) = $crob/$numruns")
+	info("Correct (AIC) = $caic/$numruns")
 	return
 end
 
