@@ -33,13 +33,13 @@ buckets = Array(Array{Float64, 2}, maxbuckets)
 fitquality = Array(Float64, maxbuckets)
 robustness = Array(Float64, maxbuckets)
 aic = Array(Float64, maxbuckets)
-deltadependency = Int[]
+deltadependency = Array(Int64, 0)
 dict_species = Dict()
-uniquewells = []
-uniquespecies = []
-truebucket = []
-truedeltas = []
-truemixer = []
+uniquewells = Array(String, 0)
+uniquespecies = Array(String, 0)
+truebucket = Array(Float64, 0)
+truedeltas = Array(Float64, 0)
+truemixer = Array(Float64, 0)
 
 #=
 dict_species = DataStructures.OrderedDict{AbstractString,AbstractString}(
@@ -866,6 +866,10 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		global datamatrix = convert(Array{Float32,2}, rawdata[2:end, 2:end])
 		global concindex = collect(1:size(datamatrix,2))
 		global dataindex = concindex
+		global truebucket = Array(Float64, 0)
+		global truedeltas = Array(Float64, 0)
+		global trueratios = Array(Float64, 0)
+		global truemixer = Array(Float64, 0)
 		info("Species ($(length(uniquespecies)))")
 		display(uniquespecies)
 		info("Wells ($(length(uniquewells)))")
@@ -930,6 +934,10 @@ end
 "Load data for rMF analysis"
 function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsset::AbstractString="", speciesset::AbstractString="", quiet::Bool=false)
 	casestring = keyword
+	global truebucket = Array(Float64, 0)
+	global truedeltas = Array(Float64, 0)
+	global trueratios = Array(Float64, 0)
+	global truemixer = Array(Float64, 0)
 	if wellsset != ""
 		if casestring != ""
 			casestring = casestring * "-w" * wellsset
