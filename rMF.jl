@@ -1264,10 +1264,14 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		end
 		indexnan = isnan(datamatrix)
 		numobservations = length(vec(datamatrix[!indexnan]))
-		numparameters = numbuckets
-		dof = numobservations - numparameters
-		sml = dof + numobservations * (log(fitquality[numbuckets]/dof) / 2 + 1.837877)
-		aic[numbuckets] = sml + 2 * numparameters
+		numparameters = *(collect(size(rMF.mixers[numbuckets]))...) + *(collect(size(rMF.buckets[numbuckets]))...) # this is the correct number of parameters that we are adjusting during the minimization
+		# numparameters = numbuckets # this is an approx; number of parameters is proportional to the numbuckets^2; so it is not that bad
+		# dof = numobservations - numparameters # this is correct, but we cannot use because we may get negative DoF
+		# dof = maximum(range)^2 - numparameters + 1 # this is a hack to make the dof positive.
+		# dof = dof < 0 ? 0 : dof
+		# sml = dof + numobservations * (log(fitquality[numbuckets]/dof) / 2 + 1.837877)
+		# aic[numbuckets] = sml + 2 * numparameters
+		aic[numbuckets] = 2 * numparameters + numobservations * log(fitquality[numbuckets]/numobservations)
 		println("Buckets: $(@sprintf("%2d", numbuckets)) Reconstruction: $(@sprintf("%12.7g", fitquality[numbuckets])) Robustness: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g", aic[numbuckets]))")
 		if casekeyword == ""
 			filename = "results/$case-$numbuckets-$retries.jld"
