@@ -1264,10 +1264,10 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		end
 		indexnan = isnan(datamatrix)
 		numobservations = length(vec(datamatrix[!indexnan]))
-		numparameters = *(collect(size(rMF.mixers[numbuckets]))...) + *(collect(size(rMF.buckets[numbuckets]))...) # this is the correct number of parameters that we are adjusting during the minimization
-		# numparameters = numbuckets # this is an approx; number of parameters is proportional to the numbuckets^2; so it is not that bad
+		numparameters = *(collect(size(rMF.mixers[numbuckets]))...) + *(collect(size(rMF.buckets[numbuckets]))...)
+		# numparameters = numbuckets # this is wrong
 		# dof = numobservations - numparameters # this is correct, but we cannot use because we may get negative DoF
-		# dof = maximum(range)^2 - numparameters + 1 # this is a hack to make the dof positive.
+		# dof = maximum(range) - numparameters + 1 # this is a hack to make the dof positive.
 		# dof = dof < 0 ? 0 : dof
 		# sml = dof + numobservations * (log(fitquality[numbuckets]/dof) / 2 + 1.837877)
 		# aic[numbuckets] = sml + 2 * numparameters
