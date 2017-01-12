@@ -643,7 +643,10 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 end
 
 "Load data for rMF analysis"
-function check(casename::AbstractString, numruns::Int=100, keyword::AbstractString=""; noise::Bool=false, ns::Int=3, nw::Int=10, nc::Int=5, nd::Int=0, nr::Int=0)
+function check(casename::AbstractString, numruns::Int=100, keyword::AbstractString=""; noise::Bool=false, ns::Int=3, nw::Int=10, nc::Int=5, nd::Int=0, nr::Int=0, seed::Integer=0)
+	if seed != 0
+		srand(seed)
+	end
 	nb = max(ns, nc+nr+nd)
 	numberofsourcesreconstruction = Array(Int64, numruns)
 	numberofsourcesrobustness = Array(Int64, numruns)
@@ -667,7 +670,10 @@ function check(casename::AbstractString, numruns::Int=100, keyword::AbstractStri
 end
 
 "Load data for rMF analysis"
-function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::Bool=false, ns::Int=3, nw::Int=10, nc::Int=5, nd::Int=0, nr::Int=0, quiet::Bool=false)
+function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::Bool=false, ns::Int=3, nw::Int=10, nc::Int=5, nd::Int=0, nr::Int=0, quiet::Bool=false, seed::Integer=0)
+	if seed != 0
+		srand(seed)
+	end
 	global case = casename
 	global casekeyword = keyword
 	global mixers = Array(Array{Float64, 2}, maxbuckets)
@@ -1258,9 +1264,10 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		end
 		indexnan = isnan(datamatrix)
 		numobservations = length(vec(datamatrix[!indexnan]))
-		dof = numobservations - numbuckets
+		numparameters = numbuckets
+		dof = numobservations - numparameters
 		sml = dof + numobservations * (log(fitquality[numbuckets]/dof) / 2 + 1.837877)
-		aic[numbuckets] = sml + 2 * numbuckets
+		aic[numbuckets] = sml + 2 * numparameters
 		println("Buckets: $(@sprintf("%2d", numbuckets)) Reconstruction: $(@sprintf("%12.7g", fitquality[numbuckets])) Robustness: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g", aic[numbuckets]))")
 		if casekeyword == ""
 			filename = "results/$case-$numbuckets-$retries.jld"
