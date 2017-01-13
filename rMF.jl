@@ -129,6 +129,12 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			return
 		end
 	end
+	wellorder, wellnameorder = getwellorder()
+
+	numwells = size(datamatrix, 1)
+	numconstituents = size(datamatrix, 2)
+	@assert numwells == length(wellnameorder)
+	@assert numconstituents == length(uniquespecies)
 	for numbuckets in range
 		filename = "results/$(casestring)-$numbuckets-$retries.jld"
 		if isfile(filename)
@@ -137,6 +143,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			mixers[numbuckets] = j["mixers"]
 			fitquality[numbuckets] = j["fit"]
 			robustness[numbuckets] = j["robustness"]
+			aic[numbuckets] = j["aic"]
 			order = DataStructures.OrderedDict(zip(uniquespecies, 1:length(uniquespecies)))
 			if haskey(j, "uniquewells") && haskey(j, "uniquespecies")
 				wells = j["uniquewells"]
@@ -163,13 +170,6 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			error("Result file `$(filename)` is missing ...\nExecute `rMF.execute($numbuckets)` to get the results!")
 			continue
 		end
-
-		wellorder, wellnameorder = getwellorder()
-
-		numwells = size(datamatrix, 1)
-		numconstituents = size(datamatrix, 2)
-		@assert numwells == length(wellnameorder)
-		@assert numconstituents == length(uniquespecies)
 
 		orderedbuckets = similar(buckets[numbuckets])
 		global spredictions = Array(Array{Float64, 2}, numbuckets)
@@ -237,10 +237,6 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		regularization_penalty = sum(log(1.+abs(orderedbuckets)).^2) / numbuckets
 
 		vector_errors = vec(errors[!indexnan])
-		numobservations = length(vector_errors)
-		dof = numobservations - numbuckets
-		sml = dof + numobservations * (log(fitquality[numbuckets]/dof) / 2 + 1.837877)
-		aic = sml + 2 * numbuckets
 		stddeverrors = std(vector_errors)
 		if stddeverrors > 0
 			kstest = HypothesisTests.ExactOneSampleKSTest(vector_errors, Distributions.Normal(0, stddeverrors))
@@ -259,13 +255,12 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 
 		f = open("results/$(casestring)-$numbuckets-$retries-stats.dat", "w")
 		println(f, "Number of buckets: $(numbuckets)")
-		println(f, "* Degrees of freedom: $(dof)")
 		println(f, "* Reconstruction: $(fitquality[numbuckets])")
 		println(f, "* Reconstruction check: $(of)")
 		println(f, "* Robustness: $(robustness[numbuckets])")
 		println(f, "* KS Test: $kstestvertdict ($(kstestdelta) $(kstestpval))")
-		println(f, "* AIC: $(aic)")
-		println(f, "* Error stats: $(aic)")
+		println(f, "* AIC: $(aic[numbuckets])")
+		println(f, "* Error stats:")
 		println(f, "  - Mean: $(mean(vector_errors))")
 		println(f, "  - Variance: $(var(vector_errors))")
 		println(f, "  - Standard Deviation: $(stddeverrors)")
@@ -280,7 +275,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			if of - fitquality[numbuckets] > 1e-1
 				print("(check fails: $(@sprintf("%12.7g", of))) ")
 			end
-			println("Robustness: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g", aic)) KS: $(@sprintf("%12.7g", kstestdelta)) StdDev: $(@sprintf("%12.7g", stddeverrors))")
+			println("Robustness: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g", aic[numbuckets])) KS: $(@sprintf("%12.7g", kstestdelta)) StdDev: $(@sprintf("%12.7g", stddeverrors))")
 			continue
 		else
 			info("Fit quality: $(fitquality[numbuckets]) (check = $(of)) (regularization penalty = $(regularization_penalty))")
@@ -292,7 +287,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 
 		info("Match error statistics:")
 		println("KS Test: $kstestvertdict ($(kstestdelta) $(kstestpval))")
-		println("AIC: $(aic)")
+		println("AIC: $(aic[numbuckets])")
 		println("Mean: $(mean(vector_errors))")
 		println("Variance: $(var(vector_errors))")
 		println("Standard Deviation: $(stddeverrors)")
@@ -883,30 +878,34 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 end
 
 "Get well order"
-function getwellorder()
-	wells2i = Dict(zip(uniquewells, 1:length(uniquewells)))
-	if isfile("data/cr-well-order-WE.dat")
-		wellnameorder = readdlm("data/cr-well-order-WE.dat")
-		wellorder = zeros(Int, length(wellnameorder))
-		for i = 1:length(wellorder)
-			if haskey(wells2i, wellnameorder[i])
-				wellorder[i] = wells2i[wellnameorder[i]]
+function getwellorder(sort::Bool=false)
+	nw = length(uniquewells)
+	if !sort
+		wells2i = Dict(zip(uniquewells, 1:nw))
+		if isfile("data/cr-well-order-WE.dat")
+			wellnameorder = readdlm("data/cr-well-order-WE.dat")
+			wellorder = zeros(Int, length(wellnameorder))
+			for i = 1:length(wellorder)
+				if haskey(wells2i, wellnameorder[i])
+					wellorder[i] = wells2i[wellnameorder[i]]
+				end
 			end
+			wellmissing = wellorder .== 0
+			indexmissing = find(wellmissing)
+			wellavailable = wellorder .!= 0
+			indexavailale = find(wellavailable)
+			wellorder = wellorder[indexavailale]
+			wellnameorder = wellnameorder[indexavailale]
+		else
+			warn("data/cr-well-order-WE.dat is missing!")
+			wellorder = 1:nw
+			wellnameorder = uniquewells
 		end
-		wellmissing = wellorder .== 0
-		indexmissing = find(wellmissing)
-		wellavailable = wellorder .!= 0
-		indexavailale = find(wellavailable)
-		wellorder = wellorder[indexavailale]
-		wellnameorder = wellnameorder[indexavailale]
-	else
-		warn("data/cr-well-order-WE.dat is missing!")
-		wellorder = 1:length(uniquewells)
-		wellnameorder = uniquewells
 	end
-	if length(wellorder) == 0
-		wellorder = 1:length(uniquewells)
-		wellnameorder = uniquewells
+	if nw != length(wellnameorder) || sort
+		warn("There are wells missing in data/cr-well-order-WE.dat")
+		wellorder = sortperm(uniquewells)
+		wellnameorder = uniquewells[wellorder]
 	end
 	return wellorder, wellnameorder
 end
@@ -1272,7 +1271,10 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		end
 		indexnan = isnan(datamatrix)
 		numobservations = length(vec(datamatrix[!indexnan]))
-		numparameters = *(collect(size(rMF.mixers[numbuckets]))...) + *(collect(size(rMF.buckets[numbuckets]))...)
+		numparameters = *(collect(size(mixers[numbuckets]))...) + *(collect(size(buckets[numbuckets]))...)
+		if mixmatch
+			numparameters -= size(mixers[numbuckets])[1]
+		end
 		# numparameters = numbuckets # this is wrong
 		# dof = numobservations - numparameters # this is correct, but we cannot use because we may get negative DoF
 		# dof = maximum(range) - numparameters + 1 # this is a hack to make the dof positive.
@@ -1293,11 +1295,13 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		if length(range) == 1
 			info("Estimated buckets:")
 			display([uniquespecies[dataindex] buckets[numbuckets]'])
-			info("True buckets:")
-			if sizeof(truedeltas) > 0
-				display([uniquespecies[dataindex] hcat(truebucket, truedeltas)'])
-			else
-				display([uniquespecies[dataindex] truebucket'])
+			if sizeof(truebucket) > 0
+				info("True buckets:")
+				if sizeof(truedeltas) > 0
+					display([uniquespecies[dataindex] hcat(truebucket, truedeltas)'])
+				else
+					display([uniquespecies[dataindex] truebucket'])
+				end
 			end
 			info("Estimated mixers:")
 			display([uniquewells mixers[numbuckets]])
