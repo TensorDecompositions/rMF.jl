@@ -139,8 +139,8 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		filename = "results/$(casestring)-$numbuckets-$retries.jld"
 		if isfile(filename)
 			j = JLD.load(filename)
-			buckets[numbuckets] = j["buckets"]
 			mixers[numbuckets] = j["mixers"]
+			buckets[numbuckets] = j["buckets"]
 			fitquality[numbuckets] = j["fit"]
 			robustness[numbuckets] = j["robustness"]
 			aic[numbuckets] = j["aic"]
@@ -228,6 +228,11 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		indexnan = isnan(datamatrix)
 		d = copy(datamatrix)
 		d[indexnan] = 0
+		try
+			@assert size(d) == size(predictions)
+		catch
+			error("There is a model setup mismatch! Data and prediction matrices do not match!\nData matrix: $(size(d))\nPrediction matrix: $(size(predictions))")
+		end
 		errors = d - predictions
 		errors[indexnan] = 0.
 		of = sum(errors.^2)
@@ -255,9 +260,9 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 
 		f = open("results/$(casestring)-$numbuckets-$retries-stats.dat", "w")
 		println(f, "Number of buckets: $(numbuckets)")
-		println(f, "* Reconstruction: $(fitquality[numbuckets])")
-		println(f, "* Reconstruction check: $(of)")
-		println(f, "* Robustness: $(robustness[numbuckets])")
+		println(f, "* Fit: $(fitquality[numbuckets])")
+		println(f, "* Fit check: $(of)")
+		println(f, "* Silhouette: $(robustness[numbuckets])")
 		println(f, "* KS Test: $kstestvertdict ($(kstestdelta) $(kstestpval))")
 		println(f, "* AIC: $(aic[numbuckets])")
 		println(f, "* Error stats:")
@@ -271,18 +276,18 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		close(f)
 
 		if brief
-			print("Buckets: $(@sprintf("%2d", numbuckets)) Reconstruction: $(@sprintf("%12.7g", fitquality[numbuckets])) ")
+			print("Sources: $(@sprintf("%2d", numbuckets)) Fit: $(@sprintf("%12.7g", fitquality[numbuckets])) ")
 			if of - fitquality[numbuckets] > 1e-1
 				print("(check fails: $(@sprintf("%12.7g", of))) ")
 			end
-			println("Robustness: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g", aic[numbuckets])) KS: $(@sprintf("%12.7g", kstestdelta)) StdDev: $(@sprintf("%12.7g", stddeverrors))")
+			println("Silhouette: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g", aic[numbuckets])) KS: $(@sprintf("%12.7g", kstestdelta)) StdDev: $(@sprintf("%12.7g", stddeverrors))")
 			continue
 		else
 			info("Fit quality: $(fitquality[numbuckets]) (check = $(of)) (regularization penalty = $(regularization_penalty))")
 			if of - fitquality[numbuckets] > 1e-1
 				warn("Objective function test fails!")
 			end
-			info("Robustness: $(robustness[numbuckets])")
+			info("Silhouette: $(robustness[numbuckets])")
 		end
 
 		info("Match error statistics:")
@@ -382,12 +387,12 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		println("Relative error: $(relerrors[indmaxerror...])")
 		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[indmaxerror[1]] relerrors[indmaxerror[1]:indmaxerror[1], :]]))
 
-		info("Max/min Species in Buckets per species:")
+		info("Max/min Species in Sources per species:")
 		maxs1 = maximum(orderedbuckets, 1)
 		mins1 = minimum(orderedbuckets, 1)
 		display([uniquespecies[dataindex] maxs1' mins1'])
 
-		info("Max/min Species in Buckets per buckets:")
+		info("Max/min Species in Sources per buckets:")
 		maxs2 = maximum(orderedbuckets, 2)
 		mins2 = minimum(orderedbuckets, 2)
 		display([maxs2 mins2])
@@ -395,7 +400,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		info("Mixers:")
 		display([uniquewells mixers[numbuckets]])
 
-		info("Buckets:")
+		info("Sources:")
 		display([uniquespecies[dataindex] orderedbuckets[source_index,:]'])
 		f = open("results/$(casestring)-$numbuckets-$retries-buckets.dat", "w")
 		writedlm(f, [uniquespecies[dataindex] orderedbuckets[source_index,:]'])
@@ -658,8 +663,8 @@ function check(casename::AbstractString, numruns::Int=100, keyword::AbstractStri
 	cfit = count(i->numberofsourcesreconstruction[i].==ns, 1:numruns)
 	crob = count(i->numberofsourcesrobustness[i].==ns, 1:numruns)
 	caic = count(i->numberofsourcesaic[i].==ns, 1:numruns)
-	info("Correct (Reconstruction) = $cfit/$numruns")
-	info("Correct (Robustness) = $crob/$numruns")
+	info("Correct (Fit) = $cfit/$numruns")
+	info("Correct (Silhouette) = $crob/$numruns")
 	info("Correct (AIC) = $caic/$numruns")
 	return
 end
@@ -1282,7 +1287,7 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		# sml = dof + numobservations * (log(fitquality[numbuckets]/dof) / 2 + 1.837877)
 		# aic[numbuckets] = sml + 2 * numparameters
 		aic[numbuckets] = 2 * numparameters + numobservations * log(fitquality[numbuckets]/numobservations)
-		println("Buckets: $(@sprintf("%2d", numbuckets)) Reconstruction: $(@sprintf("%12.7g", fitquality[numbuckets])) Robustness: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g", aic[numbuckets]))")
+		println("Sources: $(@sprintf("%2d", numbuckets)) Fit: $(@sprintf("%12.7g", fitquality[numbuckets])) Silhouette: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g", aic[numbuckets]))")
 		if casekeyword == ""
 			filename = "results/$case-$numbuckets-$retries.jld"
 		else
