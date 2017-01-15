@@ -1,6 +1,5 @@
 module rMF
 
-import MixMatch
 import NMFk
 import JLD
 import StatsBase
