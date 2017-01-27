@@ -8,7 +8,7 @@ import HypothesisTests
 import Distributions
 import SpatialAnalysis
 import PyCall
-# import Gadfly
+import Gadfly
 import Compose
 import Colors
 import PyPlot
@@ -142,7 +142,11 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			buckets[numbuckets] = j["buckets"]
 			fitquality[numbuckets] = j["fit"]
 			robustness[numbuckets] = j["robustness"]
-			aic[numbuckets] = j["aic"]
+			if haskey(j, "aic")
+				aic[numbuckets] = j["aic"]
+			else
+				aic[numbuckets] = NaN
+			end
 			order = DataStructures.OrderedDict(zip(uniquespecies, 1:length(uniquespecies)))
 			if haskey(j, "uniquewells") && haskey(j, "uniquespecies")
 				wells = j["uniquewells"]
@@ -321,7 +325,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder spredictions[source_index[i]][wellorder, :]]))
 		end
 
-		if VERSION < v"0.5"
+		if VERSION < v"0.6"
 			MArows = 5
 			MAcols = Int(ceil(numwells/5))
 			MA = Array(Compose.Context, (MArows, MAcols))
@@ -343,7 +347,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			end
 			gs = Gadfly.gridstack(MA)
 			filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.svg"
-			Gadfly.draw(Gadfly.SVG(filename, MArows * (0.8Gadfly.inch + numbuckets * 0.2Gadfly.inch), MAcols * (0.4fGadfly.inch + numconstituents * 0.2Gadfly.inch)), gs)
+			Gadfly.draw(Gadfly.SVG(filename, MArows * (0.8Gadfly.inch + numbuckets * 0.2Gadfly.inch), MAcols * (0.4Gadfly.inch + numconstituents * 0.2Gadfly.inch)), gs)
 			filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.png"
 			Gadfly.draw(Gadfly.PNG(filename, MArows * (0.8Gadfly.inch + numbuckets * 0.2Gadfly.inch), MAcols * (0.4Gadfly.inch + numconstituents * 0.2Gadfly.inch)), gs)
 		end
@@ -354,7 +358,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder errors[wellorder, :]]))
 		close(f)
 
-		if VERSION < v"0.5"
+		if VERSION < v"0.6"
 			info("Histogram of the estimation errors:")
 			g = Gadfly.plot(x=vector_errors, Gadfly.Geom.histogram())
 			filename = "results/$(casestring)-$numbuckets-$retries-error_histogram.png"
@@ -466,7 +470,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		end
 
 		bucketimpactwells[source_index, wellorder] = (bucketimpactwells .- miniw) ./ (maxiw - miniw)
-		if VERSION < v"0.5"
+		if VERSION < v"0.6"
 			gmixers = Gadfly.spy(bucketimpactwells', Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
 						Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
 						Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
@@ -482,7 +486,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		bucketimpact[source_index, :] = (bucketimpact .- minm) ./ (maxm - minm)
 		display([uniquespecies bucketimpact'])
 
-		if VERSION < v"0.5"
+		if VERSION < v"0.6"
 			gbucket = Gadfly.spy(bucketimpact', Gadfly.Scale.y_discrete(labels = i->uniquespecies[i]), Gadfly.Scale.x_discrete,
 						Gadfly.Guide.YLabel("Species"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
 						Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
@@ -535,7 +539,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			display([wellnameorder truemixer])
 		end
 
-		if VERSION < v"0.5"
+		if VERSION < v"0.6"
 			gmixers = Gadfly.spy(smixers, Gadfly.Scale.y_discrete(labels = i->wellnameorder[i]), Gadfly.Scale.x_discrete,
 						Gadfly.Guide.YLabel("Wells"), Gadfly.Guide.XLabel("Sources"), Gadfly.Guide.colorkey(""),
 						Gadfly.Theme(default_point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
@@ -766,9 +770,9 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 							 0.4 0.2 0.1 0.3;
 							 0.7 0.1 0.1 0.1]
 		global truebucket = [ 100.0   0.1   0.1   0.1  10.0   0.0;
-							    0.1 100.0   0.3   0.4  90.0  30.0;
-							    0.5   0.4 100.0   0.2  90.0   0.0;
-							    0.1   0.4   0.3 100.0  10.0  30.0]
+								0.1 100.0   0.3   0.4  90.0  30.0;
+								0.5   0.4 100.0   0.2  90.0   0.0;
+								0.1   0.4   0.3 100.0  10.0  30.0]
 		if noise
 			noise_matrix = randn(length(uniquewells), length(uniquespecies)) / 100
 		else
@@ -861,7 +865,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		rawdata[rawdata .== " "] = NaN
 		rawdata[rawdata .== ""] = NaN
 		global uniquewells = rawdata[2:end, 1]
-		global uniquespecies = rawdata[1, 2:end]'
+		global uniquespecies = rawdata[1, 2:end]
 		global datamatrix = convert(Array{Float32,2}, rawdata[2:end, 2:end])
 		global concindex = collect(1:size(datamatrix,2))
 		global dataindex = concindex
