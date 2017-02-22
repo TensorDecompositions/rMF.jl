@@ -55,8 +55,10 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		deltaindices = deltadependency
 		deltamatrix = Array(Float32, 0, 0)
 	end
+	indexnan = isnan(datamatrix)
+	numobservations = length(vec(datamatrix[!indexnan]))
 	for numbuckets in range
-		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets] = NMFk.execute(concmatrix, retries, numbuckets; deltas=deltamatrix, deltaindices=deltaindices, ratios=ratiomatrix, ratioindices=ratiocomponents, mixmatch=mixmatch, normalize=normalize, scale=scale, matchwaterdeltas=matchwaterdeltas, mixtures=mixtures, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse, clusterweights=clusterweights)
+		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets], aic[numbuckets] = NMFk.execute(concmatrix, numbuckets, retries; deltas=deltamatrix, deltaindices=deltaindices, ratios=ratiomatrix, ratioindices=ratiocomponents, mixmatch=mixmatch, normalize=normalize, scale=scale, matchwaterdeltas=matchwaterdeltas, mixtures=mixtures, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse, clusterweights=clusterweights)
 		mixsum = sum(mixers[numbuckets], 2)
 		checkone = collect(mixsum .< 0.9) | collect(mixsum .> 1.1)
 		index = find(checkone .== true)
@@ -66,25 +68,7 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 			@show mixers[numbuckets]
 			@show buckets[numbuckets]
 		end
-		indexnan = isnan(datamatrix)
-		numobservations = length(vec(datamatrix[!indexnan]))
-		numparameters = *(collect(size(mixers[numbuckets]))...) + *(collect(size(buckets[numbuckets]))...)
-		if mixmatch
-			numparameters -= size(mixers[numbuckets])[1]
-		end
-		# numparameters = numbuckets # this is wrong
-		# dof = numobservations - numparameters # this is correct, but we cannot use because we may get negative DoF
-		# dof = maximum(range) - numparameters + 1 # this is a hack to make the dof positive.
-		# dof = dof < 0 ? 0 : dof
-		# sml = dof + numobservations * (log(fitquality[numbuckets]/dof) / 2 + 1.837877)
-		# aic[numbuckets] = sml + 2 * numparameters
-		aic[numbuckets] = 2 * numparameters + numobservations * log(fitquality[numbuckets]/numobservations)
 		println("Sources: $(@sprintf("%2d", numbuckets)) Fit: $(@sprintf("%12.7g", fitquality[numbuckets])) Silhouette: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g", aic[numbuckets]))")
-		if casekeyword == ""
-			filename = "results/$case-$numbuckets-$retries.jld"
-		else
-			filename = "results/$case-$casekeyword-$numbuckets-$retries.jld"
-		end
 		if convertdeltas && isdefined(:deltastandards)
 			deltas = MixMatch.getisotopedelta(buckets[numbuckets][:, deltaindex], deltastandards, buckets[numbuckets][:, deltadependency])
 			buckets[numbuckets][:, deltaindex] = deltas
@@ -106,6 +90,11 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 				info("True mixers:")
 				display([uniquewells truemixer])
 			end
+		end
+		if casekeyword == ""
+			filename = "results/$case-$numbuckets-$retries.jld"
+		else
+			filename = "results/$case-$casekeyword-$numbuckets-$retries.jld"
 		end
 		JLD.save(filename, "wells", uniquewells, "species", uniquespecies, "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets], "aic", aic[numbuckets], "regularizationweight", regularizationweight)
 	end
