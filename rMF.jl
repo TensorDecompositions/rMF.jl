@@ -119,6 +119,8 @@ info("""rMF.loaddata("rdx-20160721")""")
 info("""rMF.loaddata("test56s4")""")
 info("""rMF.loaddata("test", nw=6, nc=4, ns=3)""")
 info("")
+# info("Test rMF")
+# include(joinpath(Pkg.dir("rMF"), "test", "runtests.jl"))
 info("Have fun ...")
 
 rmfdir = splitdir(splitdir(Base.source_path())[1])[1]
