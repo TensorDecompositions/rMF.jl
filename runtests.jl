@@ -1,3 +1,6 @@
+info("Test NMFk")
+include(joinpath(Pkg.dir("NMFk"), "test", "runtests.jl"))
+
 info("Test23 with concentrations only")
 rMF.loaddata("test23")
 rMF.execute(2:3)
