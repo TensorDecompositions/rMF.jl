@@ -32,16 +32,16 @@ println("Observation points: ", sort(collect(keys(dd))))
 
 nP = numrows = size(collect(keys(dd)))[1] # number of observation points (number of observation records)
 nT = numcols = size(dd[collect(keys(dd))[1]])[1] # number of observations for each point
-X = Array(Float64, nP, nT) # input matrix of observations
-W = Array(Float64, nP, nk) # estimated weight matrix
-H = Array(Float64, nk, nT) # estimated source matrix
-P = Array(Float64, nP, nT) # model prediction matrix
-phi = Array(Float64, nNMF) # vector for the computed objective functions
-WBig = Array(Float64, nP, 0) # estimated weight matrix collected over a series of NMFk's (initialized emptu)
-HBig = Array(Float64, 0, nT) # estimated source matrix collected over a series of NMFk's (initialized emptu)
-Hcheat = Array(Float64, nk, nT) # initial guess for the source matrix
-df = Array(Any, nP) # DataFrames matrix needed for ploting
-pl = Array(Plot, nP) # Plot matrix
+X = Array{Float64}(nP, nT) # input matrix of observations
+W = Array{Float64}(nP, nk) # estimated weight matrix
+H = Array{Float64}(nk, nT) # estimated source matrix
+P = Array{Float64}(nP, nT) # model prediction matrix
+phi = Array{Float64}(nNMF) # vector for the computed objective functions
+WBig = Array{Float64}(nP, 0) # estimated weight matrix collected over a series of NMFk's (initialized emptu)
+HBig = Array{Float64}(0, nT) # estimated source matrix collected over a series of NMFk's (initialized emptu)
+Hcheat = Array{Float64}(nk, nT) # initial guess for the source matrix
+df = Array{Any}(nP) # DataFrames matrix needed for ploting
+pl = Array{Gadfly.Plot}(nP) # Plot matrix
 
 # solve the Theis problem for R-28 to comute initial H guess (Hcheat)
 dW = Wells.solve( "R3", WellsD, WellsQ, Points, time, T, S )
@@ -91,9 +91,9 @@ writecsv("nmfk-test-$testproblem/nmfk-test-$testproblem.csv",X')
 
 # prepare the data for the DataFrames
 nP = length(collect(keys(Points)))
-pname = Array(String,nP)
-px = Array(Float64,nP)
-py = Array(Float64,nP)
+pname = Array{String}(nP)
+px = Array{Float64}(nP)
+py = Array{Float64}(nP)
 i = 0
 for k in sort(collect(keys(Points)))
 i += 1
@@ -105,9 +105,9 @@ end
 dfp = DataFrame(x=px, y=py, label=pname, info=pname, category="points")
 
 nW = length(collect(keys(WellsD)))
-wname = Array(String,nW)
-wx = Array(Float64,nW)
-wy = Array(Float64,nW)
+wname = Array{String}(nW)
+wx = Array{Float64}(nW)
+wy = Array{Float64}(nW)
 i = 0
 for k in sort(collect(keys(WellsD)))
 i += 1
@@ -288,7 +288,7 @@ if source_location_identification
 	Guide.XLabel("x [m]"), Guide.YLabel("y [m]"), Guide.yticks(orientation=:vertical), Scale.x_continuous(labels=x -> @sprintf("%.0f", x)))
 	draw(SVG(string("nmfk-test-$testproblem/nmfk-test-$testproblem.svg"), 8inch, 6inch), p)
 	# draw(PNG(string("nmfk-test-$testproblem/nmfk-test-$testproblem.png"), 8inch, 6inch), p)
-	target = Array(Float64, nP)
+	target = Array{Float64}(nP)
 	dfr = DataFrame(x = Float64[], y = Float64[], label = String[], info = String[], category =  String[])
 	include("radial-functions.jl")
 	println("Number of source locations to be analyzed = ", size(WBig)[2])

@@ -24,7 +24,7 @@ for key in sort(collect(keys(Points)))
 	welldata["y"] = Points[key][2]
 	welldata["z0"] = Points[key][3]
 	welldata["z1"] = Points[key][3]
-	welldata["obs"] = Array(Any,time[end])
+	welldata["obs"] = Array{Any}(time[end])
 	for t = time
 		obs = Dict()
 		obs["t"] = t
@@ -61,14 +61,14 @@ nNMF=10 # number of NMFk's
 
 numrows = nP
 numcols = nT
-W = Array(Float64, nP, nk) # estimated weight matrix
-H = Array(Float64, nk, nT) # estimated source matrix
-P = Array(Float64, nP, nT) # model prediction matrix
-phi = Array(Float64, nNMF) # vector for the computed objective functions
-WBig = Array(Float64, nP, 0) # estimated weight matrix collected over a series of NMFk's (initialized emptu)
-HBig = Array(Float64, 0, nT) # estimated source matrix collected over a series of NMFk's (initialized emptu)
-df = Array(Any, nP) # DataFrames matrix needed for ploting
-pl = Array(Plot, nP) # Plot matrix
+W = Array{Float64}(nP, nk) # estimated weight matrix
+H = Array{Float64}(nk, nT) # estimated source matrix
+P = Array{Float64}(nP, nT) # model prediction matrix
+phi = Array{Float64}(nNMF) # vector for the computed objective functions
+WBig = Array{Float64}(nP, 0) # estimated weight matrix collected over a series of NMFk's (initialized emptu)
+HBig = Array{Float64}(0, nT) # estimated source matrix collected over a series of NMFk's (initialized emptu)
+df = Array{Any}(nP) # DataFrames matrix needed for ploting
+pl = Array{Gadfly.Plot}(nP) # Plot matrix
 
 # plot the concentration for all the observation points
 i = 0
@@ -92,9 +92,9 @@ writecsv("nmfk-$testproblem/nmfk-$testproblem-well-names.csv",collect(keys(conc)
 writecsv("nmfk-$testproblem/nmfk-$testproblem.csv",X')
 
 # prepare the data for the DataFrames
-pname = Array(String,nP)
-px = Array(Float64,nP)
-py = Array(Float64,nP)
+pname = Array{String}(nP)
+px = Array{Float64}(nP)
+py = Array{Float64}(nP)
 i = 0
 for k in sort(collect(keys(Points)))
 	i += 1
@@ -106,9 +106,9 @@ end
 dfp = DataFrame(x=px, y=py, label=pname, info=pname, category="points")
 
 nSources = length(md["Sources"])
-sname = Array(String,nSources)
-sx = Array(Float64,nSources)
-sy = Array(Float64,nSources)
+sname = Array{String}(nSources)
+sx = Array{Float64}(nSources)
+sy = Array{Float64}(nSources)
 for i = 1:nSources
 	key = collect(keys(md["Sources"][i]))
 	sourcedata = md["Sources"][1][key[1]]
@@ -277,7 +277,7 @@ if source_location_identification
 	Guide.XLabel("x [m]"), Guide.YLabel("y [m]"), Guide.yticks(orientation=:vertical), Scale.x_continuous(labels=x -> @sprintf("%.0f", x)))
 	draw(SVG(string("nmfk-$testproblem/nmfk-$testproblem.svg"), 8inch, 6inch), p)
 	# draw(PNG(string("nmfk-$testproblem/nmfk-$testproblem.png"), 8inch, 6inch), p)
-	target = Array(Float64, nP)
+	target = Array{Float64}(nP)
 	dfr = DataFrame(x = Float64[], y = Float64[], label = String[], info = String[], category =  String[])
 	include("radial-functions.jl")
 	println("Number of source locations to be analyzed = ", size(WBig)[2])
