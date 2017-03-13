@@ -65,7 +65,7 @@ for numbuckets in range
 	end
 
 	orderedbuckets = similar(buckets[numbuckets])
-	global spredictions = Array(Array{Float64, 2}, numbuckets)
+	global spredictions = Array{Array{Float64, 2}}(numbuckets)
 	if length(deltaindex) > 0
 		numdeltas = length(deltaindex)
 		numconc = numconstituents - numdeltas
@@ -217,7 +217,7 @@ for numbuckets in range
 
 	MArows = 5
 	MAcols = Int(ceil(numwells/5))
-	MA = Array(Compose.Context, (MArows, MAcols))
+	MA = Array{Compose.Context}(MArows, MAcols)
 	i = 1
 	for w in wellorder
 		b = abs(hcat(map(i->collect(spredictions[i][w,:]), 1:numbuckets)...)) ./ abs(predictions[w:w, :]')
@@ -317,14 +317,14 @@ for numbuckets in range
 	n2buckets = (orderedbuckets .- mins2) ./ (maxs2 - mins2)
 	s2buckets = n2buckets[source_index,:]
 	display([uniquespecies[dataindex] s2buckets'])
-	bucketimpact = Array(Float64, numbuckets, numconstituents)
+	bucketimpact = Array{Float64}(numbuckets, numconstituents)
 	for s = 1:numconstituents
 		for i = 1:numbuckets
 			# bucketimpact[i, s] = sum(abs((spredictions[i][:, s])./predictions[:,s]))
 			bucketimpact[i, s] = sum(abs((spredictions[i][:, s])))
 		end
 	end
-	bucketimpactwells = Array(Float64, numbuckets, numwells)
+	bucketimpactwells = Array{Float64}(numbuckets, numwells)
 	for w = 1:numwells
 		for i = 1:numbuckets
 			# bucketimpactwells[i, w] = sum(abs((spredictions[i][w, :])./predictions[w,:]))
@@ -453,7 +453,7 @@ for numbuckets in range
 	maxy = ceil(maximum(wc, 1)[2] / mm_grid_size + .5) * mm_grid_size
 	xi = minx:grid_size:maxx
 	yi = miny:grid_size:maxy
-	zi = Array(Float64, length(xi), length(yi))
+	zi = Array{Float64}(length(xi), length(yi))
 	wm = mixers[numbuckets][goodindices,source_index]
 	for s = 1:numbuckets
 		z = wm[:, s]

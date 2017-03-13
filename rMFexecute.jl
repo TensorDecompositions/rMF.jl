@@ -27,7 +27,7 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		end
 	else
 		ratiomatrix = nothing
-		global ratiocomponents = Array(Int, 0, 0)
+		global ratiocomponents = Array{Int}(0, 0)
 	end
 	if length(deltaindex) > 0
 		concmatrix = datamatrix[:, concindex]
@@ -49,11 +49,11 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 			!nooutput && info("Concentration matrix:")
 			!nooutput && display([transposevector(["Wells"; uniquespecies]); uniquewells concmatrix])
 			deltaindices = deltadependency
-			deltamatrix = Array(Float32, 0, 0)
+			deltamatrix = Array{Float32}(0, 0)
 		end
 	else
 		deltaindices = deltadependency
-		deltamatrix = Array(Float32, 0, 0)
+		deltamatrix = Array{Float32}(0, 0)
 	end
 	indexnan = isnan(datamatrix)
 	numobservations = length(vec(datamatrix[!indexnan]))

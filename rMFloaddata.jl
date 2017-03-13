@@ -4,9 +4,9 @@ function check(casename::AbstractString, numruns::Int=100, keyword::AbstractStri
 		srand(seed)
 	end
 	nb = max(ns, nc+nr+nd)
-	numberofsourcesreconstruction = Array(Int64, numruns)
-	numberofsourcesrobustness = Array(Int64, numruns)
-	numberofsourcesaic = Array(Int64, numruns)
+	numberofsourcesreconstruction = Array{Int64}}(numruns)
+	numberofsourcesrobustness = Array{Int64}}(numruns)
+	numberofsourcesaic = Array{Int64}}(numruns)
 	for i = 1:numruns
 		info("$i")
 		loaddata(casename, keyword; noise = noise, ns = ns, nw = nw, nc = nc, nd = nd, nr = nr, quiet = true)
@@ -32,10 +32,10 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 	end
 	global case = casename
 	global casekeyword = keyword
-	global mixers = Array(Array{Float64, 2}, maxbuckets)
-	global buckets = Array(Array{Float64, 2}, maxbuckets)
-	global fitquality = Array(Float64, maxbuckets)
-	global robustness = Array(Float64, maxbuckets)
+	global mixers = Array{Array{Float64, 2}}(maxbuckets)
+	global buckets = Array{Array{Float64, 2}}(maxbuckets)
+	global fitquality = Array{Float64}(maxbuckets)
+	global robustness = Array{Float64}(maxbuckets)
 	global ratioindex = Int[]
 	global deltaindex = Int[]
 	global deltadependency = Int[]
@@ -222,10 +222,10 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		global datamatrix = convert(Array{Float32,2}, rawdata[2:end, 2:end])
 		global concindex = collect(1:size(datamatrix,2))
 		global dataindex = concindex
-		global truebucket = Array(Float64, 0)
-		global truedeltas = Array(Float64, 0)
-		global trueratios = Array(Float64, 0)
-		global truemixer = Array(Float64, 0)
+		global truebucket = Array{Float64}(0)
+		global truedeltas = Array{Float64}(0)
+		global trueratios = Array{Float64}(0)
+		global truemixer = Array{Float64}(0)
 		info("Species ($(length(uniquespecies)))")
 		display(uniquespecies)
 		info("Wells ($(length(uniquewells)))")
@@ -294,10 +294,10 @@ end
 "Load data for rMF analysis"
 function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsset::AbstractString="", speciesset::AbstractString="", quiet::Bool=false)
 	casestring = keyword
-	global truebucket = Array(Float64, 0)
-	global truedeltas = Array(Float64, 0)
-	global trueratios = Array(Float64, 0)
-	global truemixer = Array(Float64, 0)
+	global truebucket = Array{Float64}(0)
+	global truedeltas = Array{Float64}(0)
+	global trueratios = Array{Float64}(0)
+	global truemixer = Array{Float64}(0)
 	if wellsset != ""
 		if casestring != ""
 			casestring = casestring * "-w" * wellsset
@@ -314,10 +314,10 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	end
 	global casekeyword = casestring
 	global case = "cr-$probstamp"
-	global mixers = Array(Array{Float64, 2}, maxbuckets)
-	global buckets = Array(Array{Float64, 2}, maxbuckets)
-	global fitquality = Array(Float64, maxbuckets)
-	global robustness = Array(Float64, maxbuckets)
+	global mixers = Array{Array{Float64, 2}}(maxbuckets)
+	global buckets = Array{Array{Float64, 2}}(maxbuckets)
+	global fitquality = Array{Float64}(maxbuckets)
+	global robustness = Array{Float64}(maxbuckets)
 	global ratioindex = Int[]
 	filename = "data/cr-species.jld"
 	if isfile(filename)
@@ -524,7 +524,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	global dataindex = collect(1:size(datamatrix, 2))
 	global concindex = setdiff(dataindex, deltaindex)
 	coord, coordheader = readdlm("data/cr-well-coord.dat", header=true)
-	global wellcoord = Array(Float64, length(uniquewells), 2)
+	global wellcoord = Array{Float64}(length(uniquewells), 2)
 	for index = 1:length(uniquewells)
 		i = indexin([uniquewells[index]], coord[:,1])[1]
 		if i == 0
