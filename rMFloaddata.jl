@@ -4,7 +4,7 @@ function check(casename::AbstractString, numruns::Int=100, keyword::AbstractStri
 		srand(seed)
 	end
 	nb = max(ns, nc+nr+nd)
-	numberofsourcesreconstruction = Array{Int64}}(numruns)
+	numberofsourcesreconstruction = Array{Int64}(numruns)
 	numberofsourcesrobustness = Array{Int64}}(numruns)
 	numberofsourcesaic = Array{Int64}}(numruns)
 	for i = 1:numruns
