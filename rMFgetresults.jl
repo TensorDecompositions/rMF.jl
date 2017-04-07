@@ -431,7 +431,7 @@ for numbuckets in range
 	filename = "results/$(casestring)-$numbuckets-$retries-mixers.png"
 	Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
 
-	if !isdefined(:wellcoord)
+	if !isdefined(rMF, :wellcoord)
 		continue
 	end
 
@@ -471,8 +471,8 @@ for numbuckets in range
 		PyPlot.colorbar(shrink=0.5, cmap="jet")
 		PyPlot.clim(zmin, zmax)
 		PyPlot.title("Source $s")
-		PyPlot.scatter(wc[:,1], wc[:,2], marker="o", color="black", c=z, s=70, cmap="jet")
-		PyPlot.scatter(wc[:,1], wc[:,2], marker="o", color="white", c=z, s=68, cmap="jet")
+		PyPlot.scatter(wc[:,1], wc[:,2], marker="o", c=z, s=70, cmap="jet")
+		PyPlot.scatter(wc[:,1], wc[:,2], marker="o", c=z, s=68, cmap="jet")
 		PyPlot.clim(zmin, zmax)
 		for i = 1:length(wn)
 			PyPlot.annotate(wn[i], xy=(wc[i,1], wc[i,2]), xytext=(-2, 2), fontsize=8, color="white", textcoords="offset points", ha="right", va="bottom", path_effects=[PathEffects.withStroke(linewidth=1, foreground="black")])
@@ -482,6 +482,7 @@ for numbuckets in range
 		PyPlot.savefig("results/$(casestring)-$numbuckets-$retries-source-$s.png")
 		PyPlot.close()
 	end
+	#=
 	selectedspecies =[1,3,5,7]
 	swm = map(i->rMF.mixers[5][goodindices,i] * rMF.buckets[5][i,selectedspecies], source_index)
 	for b = 1:numbuckets
@@ -522,5 +523,6 @@ for numbuckets in range
 			PyPlot.close()
 		end
 	end
+	=#
 end
 end

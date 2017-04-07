@@ -5,8 +5,8 @@ function check(casename::AbstractString, numruns::Int=100, keyword::AbstractStri
 	end
 	nb = max(ns, nc+nr+nd)
 	numberofsourcesreconstruction = Array{Int64}(numruns)
-	numberofsourcesrobustness = Array{Int64}}(numruns)
-	numberofsourcesaic = Array{Int64}}(numruns)
+	numberofsourcesrobustness = Array{Int64}(numruns)
+	numberofsourcesaic = Array{Int64}(numruns)
 	for i = 1:numruns
 		info("$i")
 		loaddata(casename, keyword; noise = noise, ns = ns, nw = nw, nc = nc, nd = nd, nr = nr, quiet = true)
@@ -525,6 +525,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	global concindex = setdiff(dataindex, deltaindex)
 	coord, coordheader = readdlm("data/cr-well-coord.dat", header=true)
 	global wellcoord = Array{Float64}(length(uniquewells), 2)
+	@show wellcoord
 	for index = 1:length(uniquewells)
 		i = indexin([uniquewells[index]], coord[:,1])[1]
 		if i == 0
