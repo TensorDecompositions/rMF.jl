@@ -68,7 +68,6 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 			@show mixers[numbuckets]
 			@show buckets[numbuckets]
 		end
-		println("Sources: $(@sprintf("%2d", numbuckets)) Fit: $(@sprintf("%12.7g", fitquality[numbuckets])) Silhouette: $(@sprintf("%12.7g", robustness[numbuckets])) AIC: $(@sprintf("%12.7g", aic[numbuckets]))")
 		if convertdeltas && isdefined(:deltastandards)
 			deltas = MixMatch.getisotopedelta(buckets[numbuckets][:, deltaindex], deltastandards, buckets[numbuckets][:, deltadependency])
 			buckets[numbuckets][:, deltaindex] = deltas

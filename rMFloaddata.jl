@@ -159,12 +159,12 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		global dataindex = collect(1:(nc+nd))
 		global wellcoord = []
 		mixer = rand(nw, ns)
-		# mixer = (mixer .* 2).^10
+		mixer = (mixer .* 2).^10
 		mixer_norm = diagm(1 ./ vec(sum(mixer, 2)))
 		global truemixer = mixer_norm * mixer
 		global truemixer = truemixer ./ (sum(truemixer, 2))
 		bucket = rand(ns, nc)
-		# bucket = (bucket .* 2).^4
+		bucket = (bucket .* 2).^4
 		bucket_norm = diagm(1 ./ vec(maximum(bucket, 1)))
 		global truebucket = bucket * bucket_norm
 		if noise
@@ -241,9 +241,9 @@ end
 "Get well order"
 function getwellorder(sort::Bool=false)
 	nw = length(uniquewells)
-	if !sort
-		wells2i = Dict(zip(uniquewells, 1:nw))
+	if nw > 0 && !sort
 		if isfile("data/cr-well-order-WE.dat")
+			wells2i = Dict(zip(uniquewells, 1:nw))
 			wellnameorder = readdlm("data/cr-well-order-WE.dat")
 			wellorder = zeros(Int, length(wellnameorder))
 			for i = 1:length(wellorder)
@@ -259,14 +259,21 @@ function getwellorder(sort::Bool=false)
 			wellnameorder = wellnameorder[indexavailale]
 		else
 			warn("data/cr-well-order-WE.dat is missing!")
-			wellorder = 1:nw
+			wellorder = collect(1:nw)
 			wellnameorder = uniquewells
 		end
 	end
-	if nw != length(wellnameorder) || sort
+	if nw > 0 && length(wellnameorder) > 0 && nw != length(wellnameorder)
 		warn("There are wells missing in data/cr-well-order-WE.dat")
 		wellorder = sortperm(uniquewells)
 		wellnameorder = uniquewells[wellorder]
+	end
+	if sort
+		wellorder = sortperm(uniquewells)
+		wellnameorder = uniquewells[wellorder]
+	else
+		wellorder = collect(1:nw)
+		wellnameorder = uniquewells
 	end
 	return wellorder, wellnameorder
 end
@@ -384,7 +391,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 			if haskey(dict_deltastandards, s)
 				push!(deltastandards, dict_deltastandards[s])
 			else
-				throw("Delta Standard is mising for $(s)")
+				throw("Delta Standard is missing for $(s)")
 			end
 		end
 		global deltastandards = deltastandards

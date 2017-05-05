@@ -431,7 +431,7 @@ for numbuckets in range
 	filename = "results/$(casestring)-$numbuckets-$retries-mixers.png"
 	Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
 
-	if !isdefined(rMF, :wellcoord)
+	if !isdefined(rMF, :wellcoord) || length(wellcoord) == 0
 		continue
 	end
 
