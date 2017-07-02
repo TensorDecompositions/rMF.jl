@@ -130,7 +130,7 @@ for n = 1:nNMF
 	# W, H = NMF.nndsvd(X, nk)
 
 	# Solve NMF
-	NMF.solve!(NMF.MultUpdate(obj=:div,maxiter=200000,tol=1.0e-6,lambda=1,lambda=1.0e-9), X, W, H)
+	NMF.solve!(NMF.MultUpdate(obj=:div, maxiter=200000, tol=1.0e-6, lambda=1.0e-9), X, W, H)
 	# NMF.solve!(NMF.ProjectedALS(maxiter=100), X, W, H)
 	# NMF.solve!(NMF.ALSPGrad(maxiter=100, tolg=1.0e-6), X, W, H)
 	P = W * H
