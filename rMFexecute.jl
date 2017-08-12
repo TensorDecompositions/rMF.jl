@@ -1,7 +1,7 @@
 """
 Perform rMF analyses
 """
-function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtures::Bool=true, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, matchwaterdeltas::Bool=false, quiet::Bool=true, clusterweights::Bool=true, convertdeltas::Bool=true, ignoreratios::Bool=false, nooutput::Bool=false, sparse::Bool=false, sparsity::Number=5, sparse_cf::Symbol=:kl, sparse_div_beta::Number=-1)
+function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10, mixmatch::Bool=true, mixtures::Bool=true, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, matchwaterdeltas::Bool=false, quiet::Bool=true, clusterweights::Bool=false, convertdeltas::Bool=true, ignoreratios::Bool=false, nooutput::Bool=false, sparsity::Number=5, sparse_cf::Symbol=:kl, sparse_div_beta::Number=-1, method::Symbol=:nmf, nmfalgorithm::Symbol=:multdiv)
 	if !isdefined(rMF, :datamatrix) || sizeof(datamatrix) == 0
 		warn("rMF problem is not defined; execute `rMF.loaddata()` first!")
 		return
@@ -58,7 +58,7 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 	indexnan = isnan(datamatrix)
 	numobservations = length(vec(datamatrix[!indexnan]))
 	for numbuckets in range
-		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets], aic[numbuckets] = NMFk.execute(concmatrix, numbuckets, retries; deltas=deltamatrix, deltaindices=deltaindices, ratios=ratiomatrix, ratioindices=ratiocomponents, mixmatch=mixmatch, normalize=normalize, scale=scale, matchwaterdeltas=matchwaterdeltas, mixtures=mixtures, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse, clusterweights=clusterweights, sparse=sparse, sparsity=sparsity, sparse_cf=sparse_cf, sparse_div_beta=sparse_div_beta)
+		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets], aic[numbuckets] = NMFk.execute(concmatrix, numbuckets, retries; deltas=deltamatrix, deltaindices=deltaindices, ratios=ratiomatrix, ratioindices=ratiocomponents, mixmatch=mixmatch, normalize=normalize, scale=scale, matchwaterdeltas=matchwaterdeltas, mixtures=mixtures, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse, clusterweights=clusterweights, sparse=sparse, sparsity=sparsity, sparse_cf=sparse_cf, sparse_div_beta=sparse_div_beta, method=method, nmfalgorithm=nmfalgorithm)
 		mixsum = sum(mixers[numbuckets], 2)
 		checkone = collect(mixsum .< 0.9) | collect(mixsum .> 1.1)
 		index = find(checkone .== true)
