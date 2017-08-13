@@ -186,7 +186,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 			deltas = rand(ns, nd)
 			deltas_norm = diagm(1 ./ vec(maximum(deltas, 1)))
 			global truedeltas = deltas * deltas_norm
-			deltas = MixMatch.computedeltas(truemixer, truebucket, truedeltas, indexin(deltadependency, concindex))
+			deltas = NMFk.computedeltas(truemixer, truebucket, truedeltas, indexin(deltadependency, concindex))
 			global datamatrix = convert(Array{Float32,2}, hcat(truemixer * truebucket, deltas) + noise_matrix)
 			datamatrix[:,1:nd] = NaN
 		end
