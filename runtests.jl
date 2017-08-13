@@ -1,5 +1,4 @@
-info("Test NMFk")
-include(joinpath(Pkg.dir("NMFk"), "test", "runtests.jl"))
+info("Test rMF")
 
 info("Test23 with concentrations only")
 rMF.loaddata("test23")
