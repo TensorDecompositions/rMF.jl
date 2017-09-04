@@ -21,17 +21,19 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		!nooutput && display([transposevector(["Wells"; uniquespecies[concindex]]); uniquewells concmatrix])
 		!nooutput && info("Ratio matrix:")
 		!nooutput && display([transposevector(["Wells"; uniquespecies[ratioindex]]); uniquewells ratiomatrix])
+		#=
 		ratios = convert(Array{Float32, 3}, fill(NaN, nummixtures, numconstituents, numconstituents))
 		for i = 1:nummixtures
 			for j = 1:size(ratiocomponents, 2)
 				a = ratiocomponents[1, j]
 				b = ratiocomponents[2, j]
-				ratios[i, a, b] = ratiomatrix[i,j] # upper triangle (not needed; added for completeness)
-				ratios[i, b, a] = ratiomatrix[i,j] # lower triangle (currently used in MixMatch)
+				ratios[i, a, b] = ratiomatrix[i, j] # upper triangle (not needed; added for completeness)
+				ratios[i, b, a] = ratiomatrix[i, j] # lower triangle (currently used in MixMatch)
 			end
 		end
+		=#
 	else
-		ratiomatrix = nothing
+		ratiomatrix = Array{Float32}(0, 0)
 		global ratiocomponents = Array{Int}(0, 0)
 	end
 	if length(deltaindex) > 0

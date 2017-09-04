@@ -79,6 +79,19 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		!quiet && display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
 		return
 	end
+	if casename == "test27ratiosonly"
+		global uniquewells = ["W1", "W2"]
+		global uniquespecies = ["A", "B", "C", "D", "A/B", "B/C", "C/D"]
+		global datamatrix = convert(Array{Float32, 2}, [[NaN, NaN] [NaN, NaN] [NaN, NaN] [NaN, NaN] [1., 2.] [3., 2.] [4., 3.]])
+		global ratioindex = Int[5,6,7]
+		global ratiocomponents = Int[[1, 2] [2, 3] [3, 4]]
+		global concindex = setdiff(collect(1:size(datamatrix,2)), ratioindex)
+		global dataindex = concindex
+		global wellcoord = [[0., 0.] [0., 100.]]
+		!quiet && info("Concentration matrix:")
+		!quiet && display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
+		return
+	end
 	if casename == "test23"
 		global uniquewells = ["W1", "W2"]
 		global uniquespecies = ["A", "B", "C"]
