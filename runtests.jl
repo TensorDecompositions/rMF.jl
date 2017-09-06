@@ -10,7 +10,7 @@ rMF.execute(2:3; maxiter=100, tol=1e-2)
 
 info("Test23 with concentrations and ratios")
 rMF.loaddata("test23ratio")
-rMF.execute(2:3; method=:mixmatch, maxiter=100, tol=1e-2)
+rMF.execute(2:3; maxiter=100, tol=1e-2)
 
 info("Test27 with ratios only")
 rMF.loaddata("test27ratiosonly")
