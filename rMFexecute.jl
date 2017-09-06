@@ -6,7 +6,7 @@ end
 """
 Perform rMF analyses
 """
-function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10, mixtures::Bool=true, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, quiet::Bool=true, clusterweights::Bool=false, convertdeltas::Bool=true, ignoreratios::Bool=false, nooutput::Bool=false, method::Symbol=:mixmatch, kw...)
+function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, quiet::Bool=true, clusterweights::Bool=false, convertdeltas::Bool=true, ignoreratios::Bool=false, nooutput::Bool=false, mixture::Symbol=:mixmatch, method::Symbol=:ipopt, kw...)
 	if !isdefined(rMF, :datamatrix) || sizeof(datamatrix) == 0
 		warn("rMF problem is not defined; execute `rMF.loaddata()` first!")
 		return
@@ -65,11 +65,11 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 	indexnan = isnan(datamatrix)
 	numobservations = length(vec(datamatrix[!indexnan]))
 	for numbuckets in range
-		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets], aic[numbuckets] = NMFk.execute(concmatrix, numbuckets, retries; deltas=deltamatrix, deltaindices=deltaindices, ratios=ratiomatrix, ratioindices=ratiocomponents, normalize=normalize, scale=scale, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse, clusterweights=clusterweights, method=method, kw...)
+		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets], aic[numbuckets] = NMFk.execute(concmatrix, numbuckets, retries; deltas=deltamatrix, deltaindices=deltaindices, ratios=ratiomatrix, ratioindices=ratiocomponents, normalize=normalize, scale=scale, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse, clusterweights=clusterweights, mixture=mixture, method=method, kw...)
 		mixsum = sum(mixers[numbuckets], 2)
 		checkone = collect(mixsum .< 0.9) | collect(mixsum .> 1.1)
 		index = find(checkone .== true)
-		if length(index) > 0 && method != :mixmatch && method != :spase
+		if length(index) > 0 && mixture != :null
 			warn("Mixer matrix rows do not add to 1")
 			display(mixsum)
 			@show mixers[numbuckets]
