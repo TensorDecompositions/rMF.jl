@@ -260,7 +260,6 @@ function getwellorder(sort::Bool=false)
 	if !sort
 		if isfile("data/cr-well-order-WE.dat")
 			wells2i = Dict(zip(uniquewells, 1:nw))
-			@show wells2i
 			wellnameorder = strip.(readdlm("data/cr-well-order-WE.dat"))
 			nwellnameorder = length(wellnameorder)
 			info("Number of wells in data/cr-well-order-WE.dat is $nwellnameorder")
@@ -319,7 +318,7 @@ function displayconc(names::Vector{String})
 end
 
 "Load data for rMF analysis"
-function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsset::AbstractString="", speciesset::AbstractString="", quiet::Bool=false)
+function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsset::AbstractString="", speciesset::AbstractString="", datemin::Date=Date(1964), datemax::Date=Date(2064), quiet::Bool=false)
 	casestring = keyword
 	global truebucket = Array{Float64}(0)
 	global truedeltas = Array{Float64}(0)
@@ -525,12 +524,6 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	# goodindices = filter(i->!contains(names[i], "I129"), goodindices)
 	# goodindices = filter(i->!contains(names[i], "Cl36"), goodindices)
 	# goodindices = filter(i->!contains(dates[i], "/2015"), goodindices) # keep only data from 2015
-	wells = wells[goodindices]
-	@show unique(wells)
-	names = names[goodindices]
-	longnames = longnames[goodindices]
-	concs = concs[goodindices]
-	dates = dates[goodindices]
 	datetime=Array{Date}(length(dates))
 	for i = 1:length(dates)
 		d = 0
@@ -545,6 +538,12 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 		end
 		datetime[i] = d
 	end
+	goodindices = filter(i->(datetime[i] >= datemin && datetime[i] <= datemax), goodindices)
+	dates = dates[goodindices]
+	wells = wells[goodindices]
+	names = names[goodindices]
+	longnames = longnames[goodindices]
+	concs = concs[goodindices]
 	info("Number of processed data entries: $(length(concs))")
 
 	global uniquewells = unique(wells)
