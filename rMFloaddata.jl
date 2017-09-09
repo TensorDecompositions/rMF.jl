@@ -264,13 +264,16 @@ function getwellorder(sort::Bool=false)
 			nwellnameorder = length(wellnameorder)
 			info("Number of wells in data/cr-well-order-WE.dat is $nwellnameorder")
 			wellorder = zeros(Int, length(wellnameorder))
+			countmissing = 0
 			for i = 1:length(wellorder)
 				if haskey(wells2i, wellnameorder[i])
 					wellorder[i] = wells2i[wellnameorder[i]]
 				else
-					info("Well $(wellnameorder[i]) is missing in the input data set")
+					println("Well $(wellnameorder[i]) is missing in the input data set")
+					countmissing += 1
 				end
 			end
+			info("Number of wells in data/cr-well-order-WE.dat missing in the input data set is $countmissing")
 			wellmissing = wellorder .== 0
 			indexmissing = find(wellmissing)
 			wellavailable = wellorder .!= 0
@@ -590,19 +593,24 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	!quiet && info("Maximum standard deviation for various species:")
 	!quiet && display([uniquespecies maximum(sdmatrix, 1)'])
 	sdmatrix2 = deepcopy(sdmatrix)
-	mmm = Inf
+	info("Largest standard deviations:")
 	for i = 1:20
 		indmaxsd = ind2sub(size(sdmatrix2), indmax(sdmatrix2))
 		mmm = sdmatrix2[indmaxsd[1],indmaxsd[2]]
-		info("Standard deviation #$i $(mmm) for $(uniquewells[indmaxsd[1]]) / $(uniquespecies[indmaxsd[2]]) count = $(datacount[indmaxsd[1],indmaxsd[2]])")
+		println("$i - $(uniquewells[indmaxsd[1]]) / $(uniquespecies[indmaxsd[2]]): standard deviations $(mmm) sample size $(datacount[indmaxsd[1],indmaxsd[2]])")
 		if mmm <= 0
 			break
 		end
 		sdmatrix2[indmaxsd[1],indmaxsd[2]] = 0
 	end
-	indminsd = ind2sub(size(sdmatrix), indmin(sdmatrix[sdmatrix.>0]))
-	info("The smallest non-zero standard deviation is $(sdmatrix[indminsd[1],indminsd[2]]) for $(uniquewells[indminsd[1]]) / $(uniquespecies[indminsd[2]]) count = $(datacount[indminsd[1],indminsd[2]])")
-
+	sdmatrix2 = deepcopy(sdmatrix)
+	info("Smallest non-zero standard deviations:")
+	for i = 1:5
+		indminsd = ind2sub(size(sdmatrix2), indmin(sdmatrix2[sdmatrix2.>0]))
+		mmm = sdmatrix2[indminsd[1],indminsd[2]]
+		println("$i - $(uniquewells[indminsd[1]]) / $(uniquespecies[indminsd[2]]): standard deviations $(mmm) sample size $(datacount[indminsd[1],indminsd[2]])")
+		sdmatrix2[indminsd[1],indminsd[2]] = Inf
+	end
 	info("Potential regularization penalty = $(sum(log(1 .+ abs(maximum(datamatrix, 1))).^2))")
 	global dataindex = collect(1:size(datamatrix, 2))
 	global concindex = setdiff(dataindex, deltaindex)
