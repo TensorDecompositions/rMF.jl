@@ -254,14 +254,22 @@ end
 "Get well order"
 function getwellorder(sort::Bool=false)
 	nw = length(uniquewells)
-	if nw > 0 && !sort
+	if nw == 0
+		return
+	end
+	if !sort
 		if isfile("data/cr-well-order-WE.dat")
 			wells2i = Dict(zip(uniquewells, 1:nw))
-			wellnameorder = readdlm("data/cr-well-order-WE.dat")
+			@show wells2i
+			wellnameorder = strip.(readdlm("data/cr-well-order-WE.dat"))
+			nwellnameorder = length(wellnameorder)
+			info("Number of wells in data/cr-well-order-WE.dat is $nwellnameorder")
 			wellorder = zeros(Int, length(wellnameorder))
 			for i = 1:length(wellorder)
 				if haskey(wells2i, wellnameorder[i])
 					wellorder[i] = wells2i[wellnameorder[i]]
+				else
+					info("Well $(wellnameorder[i]) is missing in the input data set")
 				end
 			end
 			wellmissing = wellorder .== 0
@@ -275,37 +283,36 @@ function getwellorder(sort::Bool=false)
 			wellorder = collect(1:nw)
 			wellnameorder = uniquewells
 		end
-	end
-	if nw > 0 && length(wellnameorder) > 0 && nw != length(wellnameorder)
-		warn("There are wells missing in data/cr-well-order-WE.dat")
-		wellorder = sortperm(uniquewells)
-		wellnameorder = uniquewells[wellorder]
-	end
-	if sort
-		wellorder = sortperm(uniquewells)
-		wellnameorder = uniquewells[wellorder]
+		if nw > 0 && length(wellnameorder) > 0 && nw != length(wellnameorder)
+			if nw > nwellnameorder
+				wellorder = sortperm(uniquewells)
+				wellnameorder = uniquewells[wellorder]
+				warn("There are wells missing in data/cr-well-order-WE.dat")
+				warn("Original order preserved!")
+			end
+		end
 	else
-		wellorder = collect(1:nw)
-		wellnameorder = uniquewells
+		wellorder = sortperm(uniquewells)
+		wellnameorder = uniquewells[wellorder]
 	end
 	return wellorder, wellnameorder
 end
 
 "Display rMF data"
 function displayconc(name::AbstractString)
-	wellorder, wellnameorder = getwellorder()
-	if name == ""
+	displayconc([name])
+end
+function displayconc(names::Vector{String})
+	if length(names) == 0
 		display([transposevector(["Wells"; uniquespecies]); wellnameorder datamatrix[wellorder,:]])
 	else
-		i = findin(uniquespecies, [name])
+		i = findin(uniquespecies, names)
 		if length(i) > 0
-			j = i[1]
-			display([transposevector(["Wells"; uniquespecies[j]]); wellnameorder datamatrix[wellorder,j]])
+			display([transposevector(["Wells"; uniquespecies[i]]); wellnameorder datamatrix[wellorder,i]])
 		else
-			i = findin(wellnameorder, [name])
+			i = findin(wellnameorder, names)
 			if length(i) > 0
-				j = i[1]
-				display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[j] datamatrix[wellorder[j]:wellorder[j],:]]))
+				display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[i] datamatrix[wellorder[i],:]]))
 			end
 		end
 	end
@@ -339,37 +346,79 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	global fitquality = Array{Float64}(maxbuckets)
 	global robustness = Array{Float64}(maxbuckets)
 	global ratioindex = Int[]
-	filename = "data/cr-species.jld"
+
+	# read well data
+	filename = "data/cr-data-wells-$(probstamp).csv"
 	if isfile(filename)
-		global dict_species = JLD.load(filename, "species")
-		global uniquespecies = unique(collect(values(dict_species)))
-		if speciesset != ""
-			filename = "data/cr-species-set$(speciesset).txt"
-			if isfile(filename)
-				ss = readdlm(filename)
-				sd = setdiff(ss, uniquespecies)
-				if length(sd) > 0
-					display(sd)
-					error("There are species in $filename missing!")
-					return
-				end
-				sd = setdiff(uniquespecies, ss)
-				if length(sd) > 0
-					warn("The following species will be removed!")
-					display(sd)
-					ind = findin(uniquespecies, ss)
-					global uniquespecies = uniquespecies[ind]
-				end
-				dnames = ss
-			else
-				error("$filename is missing!")
-				return
-			end
-		end
+		rawwells = readcsv(filename)[2:end,[1,2,4,5,10]]
 	else
 		error("$filename is missing!")
 		return
 	end
+
+	# read pz data
+	filename = "data/cr-data-pz-$(probstamp).csv"
+	if isfile(filename)
+		rawpz = readcsv(filename)[2:end,[1,2,4,5,10]]
+	else
+		error("$filename is missing!")
+		return
+	end
+
+	# process the data
+	rawdata = [rawwells; rawpz]
+	wells = rawdata[:, 1]
+	dates = rawdata[:, 2]
+	longnames = rawdata[:, 3]
+	names = rawdata[:, 4]
+	concs = rawdata[:, 5]
+	@assert length(longnames) == length(names)
+	@assert length(names) == length(concs)
+	info("Total data record count $(length(longnames))")
+	inputspecies = sort(unique(longnames))
+	info("Species in the input file $filename:")
+	display(inputspecies)
+
+	# read species renaming dictionary
+	filename = "data/cr-species.jld"
+	if isfile(filename)
+		global dict_species = JLD.load(filename, "species")
+	else
+		error("$filename is missing!")
+		return
+	end
+
+	# set the "cool" (short) species names
+	for i = 1:length(longnames)
+		if haskey(dict_species, longnames[i])
+			names[i] = dict_species[longnames[i]]
+		end
+	end
+	global uniquespecies = unique(names)
+
+	# sort/filter species based on an input species set file
+	if speciesset != ""
+		filename = "data/cr-species-set$(speciesset).txt"
+		if isfile(filename)
+			ss = readdlm(filename)
+			sd = setdiff(ss, uniquespecies)
+			if length(sd) > 0
+				warn("There are species in $filename that are not defined in the input data set!")
+				display(sd)
+			end
+			sd = setdiff(uniquespecies, ss)
+			if length(sd) > 0
+				warn("The following species will be ignored if provided in the data set!")
+				display(sd)
+			end
+			ind = findin(ss, uniquespecies)
+			global uniquespecies = ss[ind]
+			dnames = ss
+		else
+			error("$filename is missing!")
+		end
+	end
+
 	filename = "data/cr-stable-isotope-mixtures.jld"
 	if isfile(filename)
 		deltamixtures = JLD.load(filename, "deltamixtures")
@@ -411,43 +460,34 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	else
 		warn("$filename is missing!")
 	end
-	filename = "data/cr-data-wells-$(probstamp).csv"
-	if isfile(filename)
-		rawwells = readcsv(filename)[2:end,[1,2,4,5,10]]
-	else
-		error("$filename is missing!")
-		return
-	end
-	filename = "data/cr-data-pz-$(probstamp).csv"
-	if isfile(filename)
-		rawpz = readcsv(filename)[2:end,[1,2,4,5,10]]
-	else
-		error("$filename is missing!")
-		return
-	end
-	rawdata = [rawwells; rawpz]
-	wells = rawdata[:, 1]
-	dates = rawdata[:, 2]
-	longnames = rawdata[:, 3]
-	names = rawdata[:, 4]
-	concs = rawdata[:, 5]
-	@assert length(longnames) == length(names)
-	@assert length(names) == length(concs)
-	info("Total data record count $(length(longnames))")
-	# set the "cool" (short) variable names
-	for i = 1:length(longnames)
-		if haskey(dict_species, longnames[i])
-			names[i] = dict_species[longnames[i]]
+
+	# rename chromium wells
+	goodindices = 1:length(wells)
+	for i in goodindices
+		m = match(r"([A-Z].*) S([1-9])", wells[i])
+		if m != nothing && length(m.captures) == 2
+			wells[i] = m.captures[1] * "_" * m.captures[2]
+		end
+		m = match(r"(C[rR][Ee][Xx])(.*)", wells[i])
+		if m != nothing && length(m.captures) == 2
+			wells[i] = "Ex" * m.captures[2]
+		end
+		m = match(r"(C[rR][Ii][Nn])(.*)", wells[i])
+		if m != nothing && length(m.captures) == 2
+			wells[i] = "In" * m.captures[2]
+		end
+		m = match(r"(C[rR][Pp][Zz])(.*)", wells[i])
+		if m != nothing && length(m.captures) == 2
+			wells[i] = "Pz" * m.captures[2]
 		end
 	end
-	goodindices = 1:length(wells)
 	if wellsset == ""
 		# remove MCOI LAOI SCI R-6i TA-53i
 		sd = ["MCOI", "LAOI", "SCI", "R-6i", "TA-53i"]
 		warn("The following wells will be removed!")
 		display(sd)
 		for w in sd
-			goodindices = filter(i->!contains(wells[i], w), goodindices)
+			goodindices = filter(i->(wells[i] != w), goodindices)
 		end
 	else
 		filename = "data/cr-wells-set$(wellsset).txt"
@@ -456,9 +496,15 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 			wu = unique(wells)
 			sd = setdiff(ws, wu)
 			if length(sd) > 0
-				display(sd)
-				error("There are wells in $filename missing!")
-				return
+				info("Wells in the data set:")
+				display(wu)
+				info("Wells in $filename:")
+				display(ws)
+				if length(sd) > 0
+					warn("There are wells in the input data set that are missing in $(filename)!")
+					info("Missing wells in $(filename):")
+					display(sd)
+				end
 			end
 			sd = setdiff(wu, ws)
 			if length(sd) > 0
@@ -466,7 +512,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 				display(sd)
 			end
 			for w in sd
-				goodindices = filter(i->!contains(wells[i], w), goodindices)
+				goodindices = filter(i->(wells[i] != w), goodindices)
 			end
 		else
 			error("$filename is missing!")
@@ -480,11 +526,27 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	# goodindices = filter(i->!contains(names[i], "Cl36"), goodindices)
 	# goodindices = filter(i->!contains(dates[i], "/2015"), goodindices) # keep only data from 2015
 	wells = wells[goodindices]
+	@show unique(wells)
 	names = names[goodindices]
 	longnames = longnames[goodindices]
-	dates = dates[goodindices]
 	concs = concs[goodindices]
-	info("Processed data record count $(length(names))")
+	dates = dates[goodindices]
+	datetime=Array{Date}(length(dates))
+	for i = 1:length(dates)
+		d = 0
+		try
+			d = Dates.Date(dates[i], "mm/dd/yyyy")
+		catch
+			try
+				d = Dates.Date(dates[i], "mm-dd-yyyy")
+			catch
+				@show dates[i]
+			end
+		end
+		datetime[i] = d
+	end
+	info("Number of processed data entries: $(length(concs))")
+
 	global uniquewells = unique(wells)
 	wells2i = Dict(zip(uniquewells, 1:length(uniquewells)))
 	name2j = Dict(zip(uniquespecies, 1:length(uniquespecies)))
@@ -502,6 +564,8 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	end
 
 	wellorder, wellnameorder = getwellorder()
+	global wellorder
+	global wellnameorder
 
 	info("Species ($(length(uniquespecies)))")
 	display(uniquespecies)
@@ -545,7 +609,6 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	global concindex = setdiff(dataindex, deltaindex)
 	coord, coordheader = readdlm("data/cr-well-coord.dat", header=true)
 	global wellcoord = Array{Float64}(length(uniquewells), 2)
-	@show wellcoord
 	for index = 1:length(uniquewells)
 		i = indexin([uniquewells[index]], coord[:,1])[1]
 		if i == 0
@@ -575,8 +638,22 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	for i = 1:length(uniquespecies_long)
 		if indexin([uniquespecies_long[i]], uniquelongnames)[1] == 0
 			not_ok = true
-			warn("Species name `$(uniquespecies_long[i])` defined in the dictionary is missing in the data set!")
+			warn("Species name `$(uniquespecies_long[i])` defined in the dictionary is missing in the input data set!")
 		end
+	end
+	if !not_ok
+		println("ok")
+	end
+
+	info("Check species for undefined species the data set ...")
+	not_ok = false
+	speciescount = sum(datacount,1)'
+	badspeciesindex = speciescount .== 0
+	badspecies = uniquespecies[badspeciesindex]
+	if length(badspecies) > 0
+		warn("Species should be removed because they have no data")
+		display(badspecies)
+		not_ok = true
 	end
 	if !not_ok
 		println("ok")

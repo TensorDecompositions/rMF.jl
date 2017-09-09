@@ -75,12 +75,12 @@ for numbuckets in range
 		orderedbuckets[:, deltaindex] = H_deltas
 		global predictions = similar(datamatrix)
 		predictions[:, concindex] = mixers[numbuckets] * H_conc
-		predictions[:, deltaindex] = MixMatch.computedeltas(mixers[numbuckets], H_conc, H_deltas, indexin(deltadependency, concindex))
+		predictions[:, deltaindex] = NMFk.computedeltas(mixers[numbuckets], H_conc, H_deltas, indexin(deltadependency, concindex))
 		tpredictions = zeros(size(datamatrix))
 		for i = 1:numbuckets
 			spredictions[i] = similar(datamatrix)
 			spredictions[i][:, concindex] = mixers[numbuckets][:,i:i] * H_conc[i:i,:]
-			spredictions[i][:, deltaindex] = MixMatch.computedeltas(reshape(mixers[numbuckets][:,i:i], numwells, 1), H_conc[i:i,:], H_deltas[i:i,:], indexin(deltadependency, concindex), compute_contributions=true)
+			spredictions[i][:, deltaindex] = NMFk.computedeltas(reshape(mixers[numbuckets][:,i:i], numwells, 1), H_conc[i:i,:], H_deltas[i:i,:], indexin(deltadependency, concindex), compute_contributions=true)
 			tpredictions = tpredictions + spredictions[i]
 		end
 		tpredictions[:, deltaindex] .*= predictions[:, deltaindex] ./ tpredictions[:, deltaindex]
