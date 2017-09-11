@@ -84,7 +84,7 @@ for numbuckets in range
 			tpredictions = tpredictions + spredictions[i]
 		end
 		tpredictions[:, deltaindex] .*= predictions[:, deltaindex] ./ tpredictions[:, deltaindex]
-		@Base.Test.test_approx_eq_eps maximum(abs(predictions .- tpredictions)) 0 1e-3
+		@Base.Test.test isapprox(maximum(abs(predictions .- tpredictions)), 0, atol=1e-3)
 	else
 		predictions = mixers[numbuckets] * buckets[numbuckets]
 		orderedbuckets = buckets[numbuckets]
