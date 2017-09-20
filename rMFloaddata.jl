@@ -580,8 +580,8 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	info("Observations per species:")
 	display([uniquespecies sum(datacount,1)'])
 
-	sdmatrix = sqrt(abs(sdmatrix - (datamatrix .^2) ./ datacount))
-	sdmatrix[isnan(sdmatrix)] = 0
+	sdmatrix = sqrt.(abs.(sdmatrix - (datamatrix .^2) ./ datacount))
+	sdmatrix[isnan.(sdmatrix)] = 0
 	sdmatrix[datacount.==1] = 0
 	global datamatrix = convert(Array{Float32,2}, datamatrix ./ datacount) # gives NaN if there is no data, otherwise divides by the number of results
 
@@ -611,7 +611,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 		println("$i - $(uniquewells[indminsd[1]]) / $(uniquespecies[indminsd[2]]): standard deviations $(mmm) sample size $(datacount[indminsd[1],indminsd[2]])")
 		sdmatrix2[indminsd[1],indminsd[2]] = Inf
 	end
-	info("Potential regularization penalty = $(sum(log(1 .+ abs(maximum(datamatrix, 1))).^2))")
+	info("Potential regularization penalty = $(sum(log.(1 .+ abs.(maximum(datamatrix, 1))).^2))")
 	global dataindex = collect(1:size(datamatrix, 2))
 	global concindex = setdiff(dataindex, deltaindex)
 	coord, coordheader = readdlm("data/cr-well-coord.dat", header=true)
@@ -654,8 +654,8 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 
 	info("Check species for undefined species the data set ...")
 	not_ok = false
-	speciescount = sum(datacount,1)'
-	badspeciesindex = speciescount .== 0
+	speciescount = sum(datacount, 1)
+	badspeciesindex = vec(speciescount .== 0)
 	badspecies = uniquespecies[badspeciesindex]
 	if length(badspecies) > 0
 		warn("Species should be removed because they have no data")
