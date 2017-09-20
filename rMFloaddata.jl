@@ -668,4 +668,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	if !not_ok
 		println("ok")
 	end
+
+	info("Concentration matrix to be analyzed (check for errors if any above):")
+	rMF.displayconc()
 end
