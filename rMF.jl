@@ -84,18 +84,18 @@ dict_species = DataStructures.OrderedDict{AbstractString,AbstractString}(
 JLD.save("data/cr-species.jld", "species", dict_species)
 
 deltamixtures = DataStructures.OrderedDict{Any,Any}(
-	"δ53Cr"=>ASCIIString["Cr"],
+	"δ53Cr"=>String["Cr"],
 	"δ2H"=>Any[],
 	"δ18O"=>Any[],
-	"δ15N"=>ASCIIString["NO3"],
-	"δ18O-NO3"=>ASCIIString["NO3"],
-	"δ34S-SO4"=>ASCIIString["SO4"],
-	"δ18O-SO4"=>ASCIIString["SO4"])
+	"δ15N"=>String["NO3"],
+	"δ18O-NO3"=>String["NO3"],
+	"δ34S-SO4"=>String["SO4"],
+	"δ18O-SO4"=>String["SO4"])
 JLD.save("data/cr-stable-isotope-mixtures.jld", "deltamixtures", deltamixtures)
 
 isotoperatios = DataStructures.OrderedDict{Any,Any}(
-	"r36Cl"=>ASCIIString["Cl-"],
-	"rI129"=>ASCIIString["I"])
+	"r36Cl"=>String["Cl-"],
+	"r129I"=>String["IO3"])
 JLD.save("data/cr-stable-isotope-ratios.jld", "isotoperatios", isotoperatios)
 
 deltastandards = DataStructures.OrderedDict{Any,Any}(

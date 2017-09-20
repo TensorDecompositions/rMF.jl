@@ -466,6 +466,37 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 		warn("$filename is missing!")
 	end
 
+	filename = "data/cr-stable-isotope-ratios.jld"
+	if isfile(filename)
+		dict_isotoperatios = JLD.load(filename, "isotoperatios")
+		ratioindex = Int[]
+		ratiocomponents = Array{Int}(0, 0)
+		i = 1
+		for s in uniquespecies
+			if haskey(dict_isotoperatios, s)
+				push!(ratioindex, i)
+				ind = findin(uniquespecies, dict_isotoperatios[s])
+				lind = length(ind)
+				if lind == 1
+					warn("Only one ratio component found")
+				elseif lind == 2
+					vcat(ratiocomponents, ind)
+				elseif lind > 2
+					error("More than two stable isotope ratio dependency for $s")
+					display(uniquespecies[ind])
+					return
+				else
+					warn("No ratio components found")
+				end
+			end
+			i += 1
+		end
+		global ratioindex = ratioindex
+		global ratiocomponents = ratiocomponents
+	else
+		warn("$filename is missing!")
+	end
+
 	# rename chromium wells
 	goodindices = 1:length(wells)
 	for i in goodindices

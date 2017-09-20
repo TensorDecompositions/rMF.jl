@@ -12,28 +12,25 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		return
 	end
 	concmatrix = datamatrix
-	if length(ratioindex) > 0 && !ignoreratios
-		concmatrix = datamatrix[:, concindex]
-		ratiomatrix = datamatrix[:, ratioindex]
-		nummixtures = size(concmatrix, 1)
-		numconstituents = size(concmatrix, 2)
-		!nooutput && info("Mixtures matrix:")
-		!nooutput && display([transposevector(["Wells"; uniquespecies[concindex]]); uniquewells concmatrix])
-		!nooutput && info("Ratio matrix:")
-		!nooutput && display([transposevector(["Wells"; uniquespecies[ratioindex]]); uniquewells ratiomatrix])
-		#=
-		ratios = convert(Array{Float32, 3}, fill(NaN, nummixtures, numconstituents, numconstituents))
-		for i = 1:nummixtures
-			for j = 1:size(ratiocomponents, 2)
-				a = ratiocomponents[1, j]
-				b = ratiocomponents[2, j]
-				ratios[i, a, b] = ratiomatrix[i, j] # upper triangle (not needed; added for completeness)
-				ratios[i, b, a] = ratiomatrix[i, j] # lower triangle (currently used in MixMatch)
-			end
+	numberofratios = length(ratioindex)
+	if numberofratios > 0 && !ignoreratios
+		nc, nr = size(ratiocomponents)
+		if numberofratios != nr && nc != 2
+			warn("Ratio data is corrupted; ratios will be ignored!")
+			global ratiomatrix = Array{Float32}(0, 0)
+			global ratiocomponents = Array{Int}(0, 0)
+		else
+			concmatrix = datamatrix[:, concindex]
+			ratiomatrix = datamatrix[:, ratioindex]
+			nummixtures = size(concmatrix, 1)
+			numconstituents = size(concmatrix, 2)
+			!nooutput && info("Mixtures matrix:")
+			!nooutput && display([transposevector(["Wells"; uniquespecies[concindex]]); uniquewells concmatrix])
+			!nooutput && info("Ratio matrix:")
+			!nooutput && display([transposevector(["Wells"; uniquespecies[ratioindex]]); uniquewells ratiomatrix])
 		end
-		=#
 	else
-		ratiomatrix = Array{Float32}(0, 0)
+		global ratiomatrix = Array{Float32}(0, 0)
 		global ratiocomponents = Array{Int}(0, 0)
 	end
 	if length(deltaindex) > 0
