@@ -14,7 +14,12 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 	concmatrix = datamatrix
 	numberofratios = length(ratioindex)
 	if numberofratios > 0 && !ignoreratios
-		nc, nr = size(ratiocomponents)
+		if length(size(ratiocomponents)) == 2
+			nc, nr = size(ratiocomponents)
+		else
+			nc = length(ratiocomponents)
+			nr = 1
+		end
 		if numberofratios != nr && nc != 2
 			warn("Ratio data is corrupted; ratios will be ignored!")
 			global ratiomatrix = Array{Float32}(0, 0)
@@ -64,7 +69,7 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 	for numbuckets in range
 		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets], aic[numbuckets] = NMFk.execute(concmatrix, numbuckets, retries; deltas=deltamatrix, deltaindices=deltaindices, ratios=ratiomatrix, ratioindices=ratiocomponents, normalize=normalize, scale=scale, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse, clusterweights=clusterweights, mixture=mixture, method=method, kw...)
 		mixsum = sum(mixers[numbuckets], 2)
-		if VERSION > v"0.6"
+		if VERSION >= v"0.6"
 			checkone = collect(mixsum .< 0.9) .| collect(mixsum .> 1.1)
 		else
 			checkone = collect(mixsum .< 0.9) | collect(mixsum .> 1.1)
