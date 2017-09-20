@@ -301,6 +301,9 @@ function getwellorder(sort::Bool=false)
 end
 
 "Display rMF data"
+function displayconc()
+	displayconc(Vector{String}(0))
+end
 function displayconc(name::AbstractString)
 	displayconc([name])
 end
