@@ -94,8 +94,8 @@ deltamixtures = DataStructures.OrderedDict{Any,Any}(
 JLD.save("data/cr-stable-isotope-mixtures.jld", "deltamixtures", deltamixtures)
 
 isotoperatios = DataStructures.OrderedDict{Any,Any}(
-	"r36Cl"=>String["Cl-"],
-	"r129I"=>String["IO3"])
+	"r36Cl"=>String["36Cl", "Cl-"],
+	"r129I"=>String["129I", "IO3"])
 JLD.save("data/cr-stable-isotope-ratios.jld", "isotoperatios", isotoperatios)
 
 deltastandards = DataStructures.OrderedDict{Any,Any}(
