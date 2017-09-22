@@ -6,7 +6,7 @@ end
 """
 Perform rMF analyses
 """
-function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, quiet::Bool=true, clusterweights::Bool=false, convertdeltas::Bool=true, ignoreratios::Bool=false, nooutput::Bool=false, mixture::Symbol=:mixmatch, method::Symbol=:ipopt, save::Bool=true, kw...)
+function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, quiet::Bool=true, clusterweights::Bool=false, convertdeltas::Bool=true, ignoreratios::Bool=false, nooutput::Bool=false, mixture::Symbol=:mixmatch, method::Symbol=:ipopt, save::Bool=true, tol=1e-3, kw...)
 	if !isdefined(rMF, :datamatrix) || sizeof(datamatrix) == 0
 		warn("rMF problem is not defined; execute `rMF.loaddata()` first!")
 		return
@@ -15,12 +15,12 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 	numberofratios = length(ratioindex)
 	if numberofratios > 0 && !ignoreratios
 		if length(size(ratiocomponents)) == 2
-			nc, nr = size(ratiocomponents)
+			nr, nc = size(ratiocomponents)
 		else
 			nc = length(ratiocomponents)
 			nr = 1
 		end
-		if numberofratios != nr && nc != 2
+		if numberofratios != nr && nc != 2 && length(ratiocomponents[ratiocomponents.==0]) != 0
 			warn("Ratio data is corrupted; ratios will be ignored!")
 			global ratiomatrix = Array{Float32}(0, 0)
 			global ratiocomponents = Array{Int}(0, 0)
@@ -67,7 +67,7 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 	indexnan = isnan.(datamatrix)
 	numobservations = length(vec(datamatrix[map(!, indexnan)]))
 	for numbuckets in range
-		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets], aic[numbuckets] = NMFk.execute(concmatrix, numbuckets, retries; deltas=deltamatrix, deltaindices=deltaindices, ratios=ratiomatrix, ratioindices=ratiocomponents, normalize=normalize, scale=scale, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse, clusterweights=clusterweights, mixture=mixture, method=method, kw...)
+		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets], aic[numbuckets] = NMFk.execute(concmatrix, numbuckets, retries; deltas=deltamatrix, deltaindices=deltaindices, ratios=ratiomatrix, ratioindices=ratiocomponents, normalize=normalize, scale=scale, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse, clusterweights=clusterweights, mixture=mixture, method=method, tol=tol, kw...)
 		mixsum = sum(mixers[numbuckets], 2)
 		if VERSION >= v"0.6"
 			checkone = collect(mixsum .< 0.9) .| collect(mixsum .> 1.1)

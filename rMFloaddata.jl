@@ -71,7 +71,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		global uniquespecies = ["A", "B", "A/B"]
 		global datamatrix = convert(Array{Float32, 2}, [[NaN, 2] [1, NaN] [1., 2.]])
 		global ratioindex = Int[3]
-		global ratiocomponents = Int[1, 2]
+		global ratiocomponents = Int[1, 2]'
 		global concindex = setdiff(collect(1:size(datamatrix,2)), ratioindex)
 		global dataindex = concindex
 		global wellcoord = [[0., 0.] [0., 100.]]
@@ -84,7 +84,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		global uniquespecies = ["A", "B", "C", "D", "A/B", "B/C", "C/D"]
 		global datamatrix = convert(Array{Float32, 2}, [[NaN, NaN] [NaN, NaN] [NaN, NaN] [NaN, NaN] [1., 2.] [3., 2.] [4., 3.]])
 		global ratioindex = Int[5,6,7]
-		global ratiocomponents = Int[[1, 2] [2, 3] [3, 4]]
+		global ratiocomponents = Int[[1, 2] [2, 3] [3, 4]]'
 		global concindex = setdiff(collect(1:size(datamatrix,2)), ratioindex)
 		global dataindex = concindex
 		global wellcoord = [[0., 0.] [0., 100.]]
@@ -211,7 +211,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 			ratios = map(i->string(Char(65 + (i-1)%26))^Int(ceil(i/26)) * "/" * string(Char(65 + (i)%26))^Int(ceil(i/26)), 1:nr)
 			global uniquespecies = vcat(uniquespecies, ratios)
 			global ratioindex = map(i->(nc + i), 1:nr)
-			global ratiocomponents = [1:nr 2:nr+1]'
+			global ratiocomponents = [1:nr 2:nr+1]
 			global datamatrix = convert(Array{Float32,2}, truemixer * truebucket)
 			global trueratios = map(Float32, (datamatrix[i,j] / datamatrix[i,j + 1]) for i=1:nw, j=1:nr)
 			global datamatrix = convert(Array{Float32,2}, hcat(datamatrix, trueratios) + noise_matrix)
@@ -408,7 +408,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 			ss = readdlm(filename)
 			sd = setdiff(ss, uniquespecies)
 			if length(sd) > 0
-				warn("There are species in $filename that are not defined in the input data set!")
+				warn("There are species in $filename that are not defined in the input data set $(filename)!")
 				display(sd)
 			end
 			sd = setdiff(uniquespecies, ss)
@@ -466,37 +466,6 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 		warn("$filename is missing!")
 	end
 
-	filename = "data/cr-stable-isotope-ratios.jld"
-	if isfile(filename)
-		dict_isotoperatios = JLD.load(filename, "isotoperatios")
-		ratioindex = Int[]
-		ratiocomponents = Array{Int}(0, 0)
-		i = 1
-		for s in uniquespecies
-			if haskey(dict_isotoperatios, s)
-				push!(ratioindex, i)
-				ind = findin(uniquespecies, dict_isotoperatios[s])
-				lind = length(ind)
-				if lind == 1
-					warn("Only one ratio component found")
-				elseif lind == 2
-					vcat(ratiocomponents, ind)
-				elseif lind > 2
-					error("More than two stable isotope ratio dependency for $s")
-					display(uniquespecies[ind])
-					return
-				else
-					warn("No ratio components found")
-				end
-			end
-			i += 1
-		end
-		global ratioindex = ratioindex
-		global ratiocomponents = ratiocomponents
-	else
-		warn("$filename is missing!")
-	end
-
 	# rename chromium wells
 	goodindices = 1:length(wells)
 	for i in goodindices
@@ -517,6 +486,9 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 			wells[i] = "Pz" * m.captures[2]
 		end
 	end
+	wu = unique(wells)
+	info("Wells in the data set:")
+	display(wu)
 	if wellsset == ""
 		# remove MCOI LAOI SCI R-6i TA-53i
 		sd = ["MCOI", "LAOI", "SCI", "R-6i", "TA-53i"]
@@ -528,27 +500,24 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	else
 		filename = "data/cr-wells-set$(wellsset).txt"
 		if isfile(filename)
-			ws = readdlm(filename)
-			wu = unique(wells)
+			ws = unique(readdlm(filename))
+			info("Wells in $filename:")
+			display(ws)
 			sd = setdiff(ws, wu)
 			if length(sd) > 0
-				info("Wells in the data set:")
-				display(wu)
-				info("Wells in $filename:")
-				display(ws)
 				if length(sd) > 0
 					warn("There are wells in the input data set that are missing in $(filename)!")
-					info("Missing wells in $(filename):")
+					warn("Missing wells:")
 					display(sd)
 				end
 			end
 			sd = setdiff(wu, ws)
 			if length(sd) > 0
-				warn("The following wells will be removed!")
+				warn("The following wells will be ignored because they are not defined in $(filename)!")
 				display(sd)
-			end
-			for w in sd
-				goodindices = filter(i->(wells[i] != w), goodindices)
+				for w in sd
+					goodindices = filter(i->(wells[i] != w), goodindices)
+				end
 			end
 		else
 			error("$filename is missing!")
@@ -698,6 +667,39 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	end
 	if !not_ok
 		println("ok")
+	end
+
+	filename = "data/cr-stable-isotope-ratios.jld"
+	if isfile(filename)
+		dict_isotoperatios = JLD.load(filename, "isotoperatios")
+		ratioindex = Int[]
+		ratiocomponents = Array{Int}(0, 2)
+		i = 1
+		for s in uniquespecies
+			if haskey(dict_isotoperatios, s)
+				push!(ratioindex, i)
+				nrc = length(dict_isotoperatios[s])
+				if nrc != 2
+					warn("Two components expected for ratio $(s); $(nrc) provided: $(dict_isotoperatios[s]))")
+					warn("Ratio $(s) will be ignored!")
+				end
+				ind = indexin(dict_isotoperatios[s], uniquespecies)
+				ratiocomponents = vcat(ratiocomponents, ind')
+				for j = 1:nrc
+					if ind[j] == 0
+						warn("Ratio component $(dict_isotoperatios[s][j]) not found; it will be added in the dataset!")
+						uniquespecies =[uniquespecies; dict_isotoperatios[s][j]]
+						datamatrix =[datamatrix [NaN32 for i=1:length(uniquewells)]]
+						ratiocomponents[end, j] = length(uniquespecies)
+					end
+				end
+			end
+			i += 1
+		end
+		global ratioindex = ratioindex
+		global ratiocomponents = ratiocomponents
+	else
+		warn("$filename is missing!")
 	end
 
 	info("Concentration matrix to be analyzed (check for errors if any above):")
