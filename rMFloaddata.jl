@@ -71,8 +71,8 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		global uniquespecies = ["A", "B", "A/B"]
 		global datamatrix = convert(Array{Float32, 2}, [[NaN, 2] [1, NaN] [1., 2.]])
 		global ratioindex = Int[3]
-		global ratiocomponents = Int[1, 2]'
-		global concindex = setdiff(collect(1:size(datamatrix,2)), ratioindex)
+		global ratiocomponents = collect(Int[1, 2]')
+		global concindex = setdiff(collect(1:size(datamatrix, 2)), ratioindex)
 		global dataindex = concindex
 		global wellcoord = [[0., 0.] [0., 100.]]
 		!quiet && info("Concentration matrix:")
