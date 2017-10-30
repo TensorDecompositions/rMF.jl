@@ -105,9 +105,12 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		end
 		if save
 			if casekeyword == ""
-				filename = "results/$case-$numbuckets-$retries.jld"
+				filename = joinpath("results", "$case-$numbuckets-$retries.jld")
 			else
-				filename = "results/$case-$casekeyword-$numbuckets-$retries.jld"
+				filename = joinpath("results", "$case-$casekeyword-$numbuckets-$retries.jld")
+			end
+			if !isdir("results")
+				mkdir("results")
 			end
 			JLD.save(filename, "wells", uniquewells, "species", uniquespecies, "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets], "aic", aic[numbuckets], "regularizationweight", regularizationweight)
 		end
