@@ -6,7 +6,7 @@ end
 """
 Perform rMF analyses
 """
-function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, quiet::Bool=true, clusterweights::Bool=false, convertdeltas::Bool=true, ignoreratios::Bool=false, nooutput::Bool=false, mixture::Symbol=:mixmatch, method::Symbol=:ipopt, save::Bool=true, tol=1e-3, kw...)
+function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, quiet::Bool=true, clusterweights::Bool=false, convertdeltas::Bool=true, ignoreratios::Bool=false, nooutput::Bool=false, mixture::Symbol=:mixmatch, method::Symbol=:ipopt, save::Bool=true, resultdir::AbstractString="results", tol=1e-3, kw...)
 	if !isdefined(rMF, :datamatrix) || sizeof(datamatrix) == 0
 		warn("rMF problem is not defined; execute `rMF.loaddata()` first!")
 		return
@@ -105,12 +105,12 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		end
 		if save
 			if casekeyword == ""
-				filename = joinpath("results", "$case-$numbuckets-$retries.jld")
+				filename = joinpath(resultdir, "$case-$numbuckets-$retries.jld")
 			else
-				filename = joinpath("results", "$case-$casekeyword-$numbuckets-$retries.jld")
+				filename = joinpath(resultdir, "$case-$casekeyword-$numbuckets-$retries.jld")
 			end
-			if !isdir("results")
-				mkdir("results")
+			if !isdir(resultdir)
+				mkdir(resultdir)
 			end
 			JLD.save(filename, "wells", uniquewells, "species", uniquespecies, "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets], "aic", aic[numbuckets], "regularizationweight", regularizationweight)
 		end
