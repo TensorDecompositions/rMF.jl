@@ -112,7 +112,7 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 			if !isdir(resultdir)
 				mkdir(resultdir)
 			end
-			JLD.save(filename, "wells", uniquewells, "species", uniquespecies, "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets], "aic", aic[numbuckets], "regularizationweight", regularizationweight)
+			JLD.save(filename, "wells", convert(Array{String,1}, uniquewells), "species", convert(Array{String,1}, uniquespecies), "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets], "aic", aic[numbuckets], "regularizationweight", regularizationweight)
 		end
 	end
 	return
