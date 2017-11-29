@@ -563,8 +563,12 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 		if haskey(name2j, names[index])
 			j = name2j[names[index]]
 			datacount[i, j] += 1
-			datamatrix[i, j] += concs[index]
-			sdmatrix[i, j] += concs[index] * concs[index]
+			if concs[index] < 0 && !contains(names[index], "δ")
+				warn("Negative value: $(wells[index]) $(dates[index]) $(names[index]) $(concs[index])")
+			else
+				datamatrix[i, j] += concs[index]
+				sdmatrix[i, j] += concs[index] * concs[index]
+			end
 		end
 	end
 
