@@ -131,9 +131,9 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		errors[indexnan] = NaN
 		relerrors = errors ./ d
 		relerrors[indexnan] = NaN
-		regularization_penalty = sum(log(1.+abs.(orderedbuckets)).^2) / numbuckets
+		regularization_penalty = sum(log.(1.+abs.(orderedbuckets)).^2) / numbuckets
 
-		vector_errors = vec(errors[!indexnan])
+		vector_errors = vec(errors[.!indexnan])
 		stddeverrors = std(vector_errors)
 		if stddeverrors > 0
 			kstest = HypothesisTests.ExactOneSampleKSTest(vector_errors, Distributions.Normal(0, stddeverrors))
@@ -219,7 +219,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		MA = Array{Compose.Context}(MArows, MAcols)
 		i = 1
 		for w in wellorder
-			b = abs(hcat(map(i->collect(spredictions[i][w,:]), 1:numbuckets)...)) ./ abs.(predictions[w:w, :]')
+			b = abs.(hcat(map(i->collect(spredictions[i][w,:]), 1:numbuckets)...)) ./ abs.(predictions[w:w, :]')
 			b = b ./ maximum(b, 2)
 			MA[i] = Gadfly.render(Gadfly.spy(b[:,source_index], Gadfly.Guide.title(wellnameorder[i]),
 					Gadfly.Guide.xticks(orientation=:horizontal), Gadfly.Guide.yticks(orientation=:horizontal),

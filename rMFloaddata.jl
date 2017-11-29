@@ -252,7 +252,7 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 end
 
 "Get well order"
-function getwellorder(sort::Bool=false)
+function getwellorder(sort::Bool=false; quiet=false)
 	nw = length(uniquewells)
 	if nw == 0
 		return
@@ -262,18 +262,18 @@ function getwellorder(sort::Bool=false)
 			wells2i = Dict(zip(uniquewells, 1:nw))
 			wellnameorder = strip.(readdlm("data/cr-well-order-WE.dat"))
 			nwellnameorder = length(wellnameorder)
-			info("Number of wells in data/cr-well-order-WE.dat is $nwellnameorder")
+			!quiet && info("Number of wells in data/cr-well-order-WE.dat is $nwellnameorder")
 			wellorder = zeros(Int, length(wellnameorder))
 			countmissing = 0
 			for i = 1:length(wellorder)
 				if haskey(wells2i, wellnameorder[i])
 					wellorder[i] = wells2i[wellnameorder[i]]
 				else
-					println("Well $(wellnameorder[i]) is missing in the input data set")
+					!quiet && println("Well $(wellnameorder[i]) is missing in the input data set")
 					countmissing += 1
 				end
 			end
-			info("Number of wells in data/cr-well-order-WE.dat missing in the input data set is $countmissing")
+			!quiet && info("Number of wells in data/cr-well-order-WE.dat missing in the input data set is $countmissing")
 			wellmissing = wellorder .== 0
 			indexmissing = find(wellmissing)
 			wellavailable = wellorder .!= 0
@@ -379,10 +379,10 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	concs = rawdata[:, 5]
 	@assert length(longnames) == length(names)
 	@assert length(names) == length(concs)
-	info("Total data record count $(length(longnames))")
+	!quiet && info("Total data record count $(length(longnames))")
 	inputspecies = sort(unique(longnames))
-	info("Species in the input file $filename:")
-	display(inputspecies)
+	!quiet && info("Species in the input file $filename:")
+	!quiet && display(inputspecies)
 
 	# read species renaming dictionary
 	filename = "data/cr-species.jld"
@@ -407,12 +407,12 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 		if isfile(filename)
 			ss = readdlm(filename)
 			sd = setdiff(ss, uniquespecies)
-			if length(sd) > 0
+			if !quiet && length(sd) > 0
 				warn("There are species in $filename that are not defined in the input data set $(filename)!")
 				display(sd)
 			end
 			sd = setdiff(uniquespecies, ss)
-			if length(sd) > 0
+			if !quiet && length(sd) > 0
 				warn("The following species will be ignored if provided in the data set!")
 				display(sd)
 			end
@@ -487,8 +487,10 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 		end
 	end
 	wu = unique(wells)
-	info("Wells in the data set:")
-	display(wu)
+	if !quiet
+		info("Wells in the data set:")
+		display(wu)
+	end
 	if wellsset == ""
 		# remove MCOI LAOI SCI R-6i TA-53i
 		sd = ["MCOI", "LAOI", "SCI", "R-6i", "TA-53i"]
@@ -501,11 +503,13 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 		filename = "data/cr-wells-set$(wellsset).txt"
 		if isfile(filename)
 			ws = unique(readdlm(filename))
-			info("Wells in $filename:")
-			display(ws)
+			if !quiet
+				info("Wells in $filename:")
+				display(ws)
+			end
 			sd = setdiff(ws, wu)
 			if length(sd) > 0
-				if length(sd) > 0
+				if !quiet && length(sd) > 0
 					warn("There are wells in the input data set that are missing in $(filename)!")
 					warn("Missing wells:")
 					display(sd)
@@ -513,8 +517,10 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 			end
 			sd = setdiff(wu, ws)
 			if length(sd) > 0
-				warn("The following wells will be ignored because they are not defined in $(filename)!")
-				display(sd)
+				if !quiet
+					warn("The following wells will be ignored because they are not defined in $(filename)!")
+					display(sd)
+				end
 				for w in sd
 					goodindices = filter(i->(wells[i] != w), goodindices)
 				end
@@ -550,7 +556,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	names = names[goodindices]
 	longnames = longnames[goodindices]
 	concs = concs[goodindices]
-	info("Number of processed data entries: $(length(concs))")
+	!quiet && info("Number of processed data entries: $(length(concs))")
 
 	global uniquewells = unique(wells)
 	wells2i = Dict(zip(uniquewells, 1:length(uniquewells)))
@@ -564,7 +570,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 			j = name2j[names[index]]
 			datacount[i, j] += 1
 			if concs[index] < 0 && !contains(names[index], "δ")
-				warn("Negative value: $(wells[index]) $(dates[index]) $(names[index]) $(concs[index])")
+				!quiet && warn("Negative value: $(wells[index]) $(dates[index]) $(names[index]) $(concs[index])")
 			else
 				datamatrix[i, j] += concs[index]
 				sdmatrix[i, j] += concs[index] * concs[index]
@@ -572,20 +578,22 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 		end
 	end
 
-	wellorder, wellnameorder = getwellorder()
+	wellorder, wellnameorder = getwellorder(quiet=quiet)
 	global wellorder
 	global wellnameorder
 
-	info("Species ($(length(uniquespecies)))")
-	display(uniquespecies)
-	info("Wells ($(length(wellnameorder)))")
-	display(wellnameorder)
-	info("Observations count:")
-	display([transposevector(["Wells"; uniquespecies]); wellnameorder datacount[wellorder,:]])
-	info("Observations per well:")
-	display([wellnameorder sum(datacount,2)[wellorder]])
-	info("Observations per species:")
-	display([uniquespecies sum(datacount,1)'])
+	if !quiet
+		info("Species ($(length(uniquespecies)))")
+		display(uniquespecies)
+		info("Wells ($(length(wellnameorder)))")
+		display(wellnameorder)
+		info("Observations count:")
+		display([transposevector(["Wells"; uniquespecies]); wellnameorder datacount[wellorder,:]])
+		info("Observations per well:")
+		display([wellnameorder sum(datacount,2)[wellorder]])
+		info("Observations per species:")
+		display([uniquespecies sum(datacount,1)'])
+	end
 
 	sdmatrix = sqrt.(abs.(sdmatrix - (datamatrix .^2) ./ datacount))
 	sdmatrix[isnan.(sdmatrix)] = 0
@@ -600,25 +608,25 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	!quiet && info("Maximum standard deviation for various species:")
 	!quiet && display([uniquespecies maximum(sdmatrix, 1)'])
 	sdmatrix2 = deepcopy(sdmatrix)
-	info("Largest standard deviations:")
+	!quiet && info("Largest standard deviations:")
 	for i = 1:20
 		indmaxsd = ind2sub(size(sdmatrix2), indmax(sdmatrix2))
 		mmm = sdmatrix2[indmaxsd[1],indmaxsd[2]]
-		println("$i - $(uniquewells[indmaxsd[1]]) / $(uniquespecies[indmaxsd[2]]): standard deviations $(mmm) sample size $(datacount[indmaxsd[1],indmaxsd[2]])")
+		!quiet && println("$i - $(uniquewells[indmaxsd[1]]) / $(uniquespecies[indmaxsd[2]]): standard deviations $(mmm) sample size $(datacount[indmaxsd[1],indmaxsd[2]])")
 		if mmm <= 0
 			break
 		end
 		sdmatrix2[indmaxsd[1],indmaxsd[2]] = 0
 	end
 	sdmatrix2 = deepcopy(sdmatrix)
-	info("Smallest non-zero standard deviations:")
+	!quiet && info("Smallest non-zero standard deviations:")
 	for i = 1:5
 		indminsd = ind2sub(size(sdmatrix2), indmin(sdmatrix2[sdmatrix2.>0]))
 		mmm = sdmatrix2[indminsd[1],indminsd[2]]
-		println("$i - $(uniquewells[indminsd[1]]) / $(uniquespecies[indminsd[2]]): standard deviations $(mmm) sample size $(datacount[indminsd[1],indminsd[2]])")
+		!quiet && println("$i - $(uniquewells[indminsd[1]]) / $(uniquespecies[indminsd[2]]): standard deviations $(mmm) sample size $(datacount[indminsd[1],indminsd[2]])")
 		sdmatrix2[indminsd[1],indminsd[2]] = Inf
 	end
-	info("Potential regularization penalty = $(sum(log.(1 .+ abs.(maximum(datamatrix, 1))).^2))")
+	!quiet && info("Potential regularization penalty = $(sum(log.(1 .+ abs.(maximum(datamatrix, 1))).^2))")
 	global dataindex = collect(1:size(datamatrix, 2))
 	global concindex = setdiff(dataindex, deltaindex)
 	coord, coordheader = readdlm("data/cr-well-coord.dat", header=true)
@@ -626,51 +634,51 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	for index = 1:length(uniquewells)
 		i = indexin([uniquewells[index]], coord[:,1])[1]
 		if i == 0
-			warn("Coordinates for well $(uniquewells[index]) are missing!")
+			!quiet && warn("Coordinates for well $(uniquewells[index]) are missing!")
 		else
 			wellcoord[index,1] = coord[i,2]
 			wellcoord[index,2] = coord[i,3]
 		end
 	end
 
-	info("Check species in the dictionary ...")
+	!quiet && info("Check species in the dictionary ...")
 	not_ok = false
 	uniquelongnames = unique(longnames)
 	for i = 1:length(uniquelongnames)
 		if !haskey(dict_species, uniquelongnames[i])
 			not_ok = true
-			warn("Species name `$(uniquelongnames[i])` in the data set is not defined in the dictionary!")
+			!quiet && warn("Species name `$(uniquelongnames[i])` in the data set is not defined in the dictionary!")
 		end
 	end
 	if !not_ok
-		println("ok")
+		!quiet && println("ok")
 	end
 
-	info("Check species in the data set ...")
+	!quiet && info("Check species in the data set ...")
 	not_ok = false
 	uniquespecies_long = collect(keys(dict_species))
 	for i = 1:length(uniquespecies_long)
 		if indexin([uniquespecies_long[i]], uniquelongnames)[1] == 0
 			not_ok = true
-			warn("Species name `$(uniquespecies_long[i])` defined in the dictionary is missing in the input data set!")
+			!quiet && warn("Species name `$(uniquespecies_long[i])` defined in the dictionary is missing in the input data set!")
 		end
 	end
 	if !not_ok
-		println("ok")
+		!quiet && println("ok")
 	end
 
-	info("Check species for undefined species the data set ...")
+	!quiet && info("Check species for undefined species the data set ...")
 	not_ok = false
 	speciescount = sum(datacount, 1)
 	badspeciesindex = vec(speciescount .== 0)
 	badspecies = uniquespecies[badspeciesindex]
 	if length(badspecies) > 0
-		warn("Species should be removed because they have no data")
-		display(badspecies)
+		!quiet && warn("Species should be removed because they have no data")
+		!quiet && display(badspecies)
 		not_ok = true
 	end
 	if !not_ok
-		println("ok")
+		!quiet && println("ok")
 	end
 
 	filename = "data/cr-stable-isotope-ratios.jld"
@@ -703,9 +711,9 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 		global ratioindex = ratioindex
 		global ratiocomponents = ratiocomponents
 	else
-		warn("$filename is missing!")
+		!quiet && warn("$filename is missing!")
 	end
 
-	info("Concentration matrix to be analyzed (check for errors if any above):")
-	rMF.displayconc()
+	!quiet && info("Concentration matrix to be analyzed (check for errors if any above):")
+	!quiet && rMF.displayconc()
 end
