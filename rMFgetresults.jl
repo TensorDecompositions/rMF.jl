@@ -219,7 +219,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		MA = Array{Compose.Context}(MArows, MAcols)
 		i = 1
 		for w in wellorder
-			b = abs(hcat(map(i->collect(spredictions[i][w,:]), 1:numbuckets)...)) ./ abs(predictions[w:w, :]')
+			b = abs(hcat(map(i->collect(spredictions[i][w,:]), 1:numbuckets)...)) ./ abs.(predictions[w:w, :]')
 			b = b ./ maximum(b, 2)
 			MA[i] = Gadfly.render(Gadfly.spy(b[:,source_index], Gadfly.Guide.title(wellnameorder[i]),
 					Gadfly.Guide.xticks(orientation=:horizontal), Gadfly.Guide.yticks(orientation=:horizontal),
@@ -253,7 +253,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			madsdisplay(filename)
 		end
 
-		indmaxerror = ind2sub(size(errors), indmax(abs(errors)))
+		indmaxerror = ind2sub(size(errors), indmax(abs.(errors)))
 		info("The largest absolute match error is for $(wellnameorder[indmaxerror[1]]) / $(uniquespecies[indmaxerror[2]]).")
 		println("Observation: $(datamatrix[indmaxerror...])")
 		println("Prediction: $(predictions[indmaxerror...])")
@@ -267,7 +267,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder relerrors[wellorder, :]]))
 		close(f)
 
-		indmaxerror = ind2sub(size(relerrors), indmax(abs(relerrors)))
+		indmaxerror = ind2sub(size(relerrors), indmax(abs.(relerrors)))
 		info("The largest absolute relative match error is for $(wellnameorder[indmaxerror[1]]) / $(uniquespecies[indmaxerror[2]]).")
 		println("Observation: $(datamatrix[indmaxerror...])")
 		println("Prediction: $(predictions[indmaxerror...])")
@@ -320,14 +320,14 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		for s = 1:numconstituents
 			for i = 1:numbuckets
 				# bucketimpact[i, s] = sum(abs((spredictions[i][:, s])./predictions[:,s]))
-				bucketimpact[i, s] = sum(abs((spredictions[i][:, s])))
+				bucketimpact[i, s] = sum(abs.((spredictions[i][:, s])))
 			end
 		end
 		bucketimpactwells = Array{Float64}(numbuckets, numwells)
 		for w = 1:numwells
 			for i = 1:numbuckets
 				# bucketimpactwells[i, w] = sum(abs((spredictions[i][w, :])./predictions[w,:]))
-				bucketimpactwells[i, w] = sum(abs((spredictions[i][w, :])))
+				bucketimpactwells[i, w] = sum(abs.((spredictions[i][w, :])))
 			end
 		end
 
@@ -457,7 +457,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		for s = 1:numbuckets
 			z = wm[:, s]
 			z[z.<1e-6] = 1e-6
-			z = log10(z)
+			z = log10.(z)
 			@assert length(wc[:,1]) == length(z)
 			@assert length(wc[:,1]) == length(unique(wc[:,1])) || length(wc[:,2]) == length(unique(wc[:,2]))
 			zi = SpatialAnalysis.linear_interpolation(wc[:,1], wc[:,2], z, xi, yi)
