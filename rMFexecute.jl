@@ -11,6 +11,14 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		warn("rMF problem is not defined; execute `rMF.loaddata()` first!")
 		return
 	end
+	if !isdir(resultdir)
+		mkdir(resultdir)
+	end
+	if casekeyword == ""
+		casefilename = joinpath(resultdir, "$case")
+	else
+		casefilename = joinpath(resultdir, "$case-$casekeyword")
+	end
 	concmatrix = datamatrix
 	numberofratios = length(ratioindex)
 	if numberofratios > 0 && !ignoreratios
@@ -67,7 +75,7 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 	indexnan = isnan.(datamatrix)
 	numobservations = length(vec(datamatrix[map(!, indexnan)]))
 	for numbuckets in range
-		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets], aic[numbuckets] = NMFk.execute(concmatrix, numbuckets, retries; deltas=deltamatrix, deltaindices=deltaindices, ratios=ratiomatrix, ratioindices=ratiocomponents, normalize=normalize, scale=scale, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse, clusterweights=clusterweights, mixture=mixture, method=method, tol=tol, kw...)
+		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets], aic[numbuckets] = NMFk.execute(concmatrix, numbuckets, retries; deltas=deltamatrix, deltaindices=deltaindices, ratios=ratiomatrix, ratioindices=ratiocomponents, normalize=normalize, scale=scale, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse, clusterweights=clusterweights, mixture=mixture, method=method, tol=tol, casefilename=casefilename, kw...)
 		mixsum = sum(mixers[numbuckets], 2)
 		if VERSION >= v"0.6"
 			checkone = collect(mixsum .< 0.9) .| collect(mixsum .> 1.1)
@@ -104,14 +112,7 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 			end
 		end
 		if save
-			if casekeyword == ""
-				filename = joinpath(resultdir, "$case-$numbuckets-$retries.jld")
-			else
-				filename = joinpath(resultdir, "$case-$casekeyword-$numbuckets-$retries.jld")
-			end
-			if !isdir(resultdir)
-				mkdir(resultdir)
-			end
+			filename = "$casefilename-$numbuckets-$retries.jld"
 			JLD.save(filename, "wells", convert(Array{String,1}, uniquewells), "species", convert(Array{String,1}, uniquespecies), "mixers", mixers[numbuckets], "buckets", buckets[numbuckets], "fit", fitquality[numbuckets], "robustness", robustness[numbuckets], "aic", aic[numbuckets], "regularizationweight", regularizationweight)
 		end
 	end
