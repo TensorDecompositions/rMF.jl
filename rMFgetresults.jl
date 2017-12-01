@@ -1,5 +1,5 @@
 "Retrieve saved rMF results"
-function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::AbstractString=""; retries::Int=10, brief::Bool=false)
+function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::AbstractString=""; retries::Int=10, resultsdir::AbstractString="result",brief::Bool=false)
 	if keyword != ""
 		if case != "" && !contains(keyword, case)
 			casestring = case * "-" * keyword
@@ -24,7 +24,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 	@assert numwells == length(wellnameorder)
 	@assert numconstituents == length(uniquespecies)
 	for numbuckets in range
-		filename = "results/$(casestring)-$numbuckets-$retries.jld"
+		filename = jointpath(resultsdir, "$(casestring)-$numbuckets-$retries.jld")
 		if isfile(filename)
 			j = JLD.load(filename)
 			mixers[numbuckets] = j["mixers"]
@@ -61,6 +61,10 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		else
 			error("Result file `$(filename)` is missing ...\nExecute `rMF.execute($numbuckets)` to get the results!")
 			continue
+		end
+		filename = jointpath(resultsdir, "$(casestring)-$numbuckets-$retries-all.jld")
+		if isfile(filename)
+			j = JLD.load(filename)
 		end
 
 		orderedbuckets = similar(buckets[numbuckets])
@@ -150,7 +154,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			kstestvertdict = "unknown"
 		end
 
-		f = open("results/$(casestring)-$numbuckets-$retries-stats.dat", "w")
+		f = open(joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-stats.dat", "w"))
 		println(f, "Number of buckets: $(numbuckets)")
 		println(f, "* Fit: $(fitquality[numbuckets])")
 		println(f, "* Fit check: $(of)")
@@ -193,7 +197,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		println("Skewness: $(StatsBase.skewness(vector_errors))")
 		println("Kurtosis: $(StatsBase.kurtosis(vector_errors))")
 
-		f = open("results/$(casestring)-data.dat", "w")
+		f = open(joinpath(resultsdir, "$(casestring)-data.dat"), "w")
 		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder datamatrix[wellorder, :]]))
 		close(f)
 
@@ -202,7 +206,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 
 		info("Predictions:")
 		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder predictions[wellorder, :]]))
-		f = open("results/$(casestring)-$numbuckets-$retries-predictions.dat", "w")
+		f = open(joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-predictions.dat", "w"))
 		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder predictions[wellorder, :]]))
 		close(f)
 
@@ -210,7 +214,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		for i = 1:numbuckets
 			info("Predictions for bucket #$(i)")
 			display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder spredictions[source_index[i]][wellorder, :]]))
-			f = open("results/$(casestring)-$numbuckets-$retries-bucket-$i-predictions.dat", "w")
+			f = open(joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-bucket-$i-predictions.dat"), "w")
 			writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder spredictions[source_index[i]][wellorder, :]]))
 		end
 
@@ -234,20 +238,20 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			MA[w] = Compose.context()
 		end
 		gs = Gadfly.gridstack(MA)
-		filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.svg"
+		filename = joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-wellmixtures.svg")
 		Gadfly.draw(Gadfly.SVG(filename, MArows * (0.8Gadfly.inch + numbuckets * 0.2Gadfly.inch), MAcols * (0.4Gadfly.inch + numconstituents * 0.2Gadfly.inch)), gs)
-		filename = "results/$(casestring)-$numbuckets-$retries-wellmixtures.png"
+		filename = joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-wellmixtures.png")
 		Gadfly.draw(Gadfly.PNG(filename, MArows * (0.8Gadfly.inch + numbuckets * 0.2Gadfly.inch), MAcols * (0.4Gadfly.inch + numconstituents * 0.2Gadfly.inch)), gs)
 
 		info("Match errors:")
 		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder errors[wellorder, :]]))
-		f = open("results/$(casestring)-$numbuckets-$retries-errors.dat", "w")
+		f = open(joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-errors.dat"), "w")
 		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder errors[wellorder, :]]))
 		close(f)
 
 		info("Histogram of the estimation errors:")
 		g = Gadfly.plot(x=vector_errors, Gadfly.Geom.histogram())
-		filename = "results/$(casestring)-$numbuckets-$retries-error_histogram.png"
+		filename = joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-error_histogram.png")
 		Gadfly.draw(Gadfly.PNG(filename, 6Gadfly.inch, 4Gadfly.inch), g)
 		if isdefined(:madsdisplay)
 			madsdisplay(filename)
@@ -263,7 +267,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 
 		info("Relative match errors:")
 		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder relerrors[wellorder, :]]))
-		f = open("results/$(casestring)-$numbuckets-$retries-relerrors.dat", "w")
+		f = open(joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-relerrors.dat"), "w")
 		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder relerrors[wellorder, :]]))
 		close(f)
 
@@ -290,7 +294,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 
 		info("Sources:")
 		display([uniquespecies[dataindex] orderedbuckets[source_index,:]'])
-		f = open("results/$(casestring)-$numbuckets-$retries-buckets.dat", "w")
+		f = open(joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-buckets.dat"), "w")
 		writedlm(f, [uniquespecies[dataindex] orderedbuckets[source_index,:]'])
 		close(f)
 
@@ -360,9 +364,9 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 					Gadfly.Theme(point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
 					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
 		# filename, format = Mads.setimagefileformat(filename, format)
-		filename = "results/$(casestring)-$numbuckets-$retries-bucketimpactwells.svg"
+		filename = joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-bucketimpactwells.svg")
 		Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
-		filename = "results/$(casestring)-$numbuckets-$retries-bucketimpactwells.png"
+		filename = joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-bucketimpactwells.png")
 		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
 
 		info("Ordered buckets normalized to capture the overall impact on the species concentrations:")
@@ -374,9 +378,9 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 					Gadfly.Theme(point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
 					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
 		# filename, format = Mads.setimagefileformat(filename, format)
-		filename = "results/$(casestring)-$numbuckets-$retries-bucketimpact.svg"
+		filename = joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-bucketimpact.svg")
 		Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
-		filename = "results/$(casestring)-$numbuckets-$retries-bucketimpact.png"
+		filename = joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-bucketimpact.png")
 		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
 
 		# s1buckets[s1buckets.<1e-6] = 1e-6
@@ -385,9 +389,9 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 					Gadfly.Theme(point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
 					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
 		# filename, format = Mads.setimagefileformat(filename, format)
-		filename = "results/$(casestring)-$numbuckets-$retries-buckets.svg"
+		filename = joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-buckets.svg")
 		Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
-		filename = "results/$(casestring)-$numbuckets-$retries-buckets.png"
+		filename = joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-buckets.png")
 		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
 
 	#=
@@ -396,9 +400,9 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 					Gadfly.Theme(point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
 					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
 		# filename, format = Mads.setimagefileformat(filename, format)
-		filename = "results/$(casestring)-$numbuckets-$retries-buckets2.svg"
+		filename = joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-buckets2.svg")
 		Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
-		filename = "results/$(casestring)-$numbuckets-$retries-buckets2.png"
+		filename = joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-buckets2.png")
 		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gbucket)
 	=#
 		info("Ordered buckets:")
@@ -425,9 +429,9 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 					Gadfly.Theme(point_size=20Gadfly.pt, major_label_font_size=14Gadfly.pt, minor_label_font_size=12Gadfly.pt, key_title_font_size=16Gadfly.pt, key_label_font_size=12Gadfly.pt),
 					Gadfly.Scale.ContinuousColorScale(Gadfly.Scale.lab_gradient(parse(Colors.Colorant, "green"), parse(Colors.Colorant, "yellow"), parse(Colors.Colorant, "red")), minvalue = 0, maxvalue = 1))
 		# filename, format = Mads.setimagefileformat(filename, format)
-		filename = "results/$(casestring)-$numbuckets-$retries-mixers.svg"
+		filename = joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-mixers.svg")
 		Gadfly.draw(Gadfly.SVG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
-		filename = "results/$(casestring)-$numbuckets-$retries-mixers.png"
+		filename = joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-mixers.png")
 		Gadfly.draw(Gadfly.PNG(filename,6Gadfly.inch,12Gadfly.inch), gmixers)
 
 		if !isdefined(rMF, :wellcoord) || length(wellcoord) == 0
@@ -478,7 +482,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			end
 			PyPlot.yticks([538500, 539500], ["538500", "539500"], rotation="vertical")
 			PyPlot.tight_layout()
-			PyPlot.savefig("results/$(casestring)-$numbuckets-$retries-source-$s.png")
+			PyPlot.savefig(joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-source-$s.png"))
 			PyPlot.close()
 		end
 		#=
@@ -518,7 +522,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 				end
 				PyPlot.yticks([538500, 539500], ["538500", "539500"], rotation="vertical")
 				PyPlot.tight_layout()
-				PyPlot.savefig("results/$(casestring)-$numbuckets-$retries-source-$b-$current_species.png")
+				PyPlot.savefig(joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-source-$b-$current_species.png"))
 				PyPlot.close()
 			end
 		end
