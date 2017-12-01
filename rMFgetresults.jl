@@ -1,5 +1,5 @@
 "Retrieve saved rMF results"
-function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::AbstractString=""; retries::Int=10, resultsdir::AbstractString="results",brief::Bool=false)
+function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::AbstractString=""; retries::Int=10, resultsdir::AbstractString="results", datadir::AbstractString="data", brief::Bool=false)
 	if keyword != ""
 		if case != "" && !contains(keyword, case)
 			casestring = case * "-" * keyword
@@ -42,8 +42,9 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 				species = j["uniquespecies"]
 				remap = DataStructures.OrderedDict(zip(species, 1:length(species)))
 			else
-				if isfile("data/cr-species-order-$(case).jld")
-					dictold=JLD.load("data/cr-species-order-$(case).jld","dictionary")
+				filename = joinpath(datadir, "cr-species-order-$(case).jld")
+				if isfile(filename)
+					dictold = JLD.load(filename, "dictionary")
 					remap = DataStructures.OrderedDict(zip(collect(keys(dictold)), 1:length(uniquespecies)))
 				else
 					remap = DataStructures.OrderedDict(zip(uniquespecies, 1:length(uniquespecies)))
@@ -65,6 +66,10 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		filename = joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-all.jld")
 		if isfile(filename)
 			j = JLD.load(filename)
+			mixers_var[numbuckets] = j["Wvar"]
+			buckets_var[numbuckets] = j["Hvar"]
+			@show mixers_var[numbuckets]
+			@show buckets_var[numbuckets]
 		end
 
 		orderedbuckets = similar(buckets[numbuckets])
