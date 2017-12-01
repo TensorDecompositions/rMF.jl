@@ -1,5 +1,5 @@
 "Retrieve saved rMF results"
-function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::AbstractString=""; retries::Int=10, resultsdir::AbstractString="result",brief::Bool=false)
+function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::AbstractString=""; retries::Int=10, resultsdir::AbstractString="results",brief::Bool=false)
 	if keyword != ""
 		if case != "" && !contains(keyword, case)
 			casestring = case * "-" * keyword
@@ -24,7 +24,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 	@assert numwells == length(wellnameorder)
 	@assert numconstituents == length(uniquespecies)
 	for numbuckets in range
-		filename = jointpath(resultsdir, "$(casestring)-$numbuckets-$retries.jld")
+		filename = joinpath(resultsdir, "$(casestring)-$numbuckets-$retries.jld")
 		if isfile(filename)
 			j = JLD.load(filename)
 			mixers[numbuckets] = j["mixers"]
@@ -62,7 +62,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			error("Result file `$(filename)` is missing ...\nExecute `rMF.execute($numbuckets)` to get the results!")
 			continue
 		end
-		filename = jointpath(resultsdir, "$(casestring)-$numbuckets-$retries-all.jld")
+		filename = joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-all.jld")
 		if isfile(filename)
 			j = JLD.load(filename)
 		end
@@ -154,7 +154,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			kstestvertdict = "unknown"
 		end
 
-		f = open(joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-stats.dat", "w"))
+		f = open(joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-stats.dat"), "w")
 		println(f, "Number of buckets: $(numbuckets)")
 		println(f, "* Fit: $(fitquality[numbuckets])")
 		println(f, "* Fit check: $(of)")
@@ -206,7 +206,7 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 
 		info("Predictions:")
 		display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder predictions[wellorder, :]]))
-		f = open(joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-predictions.dat", "w"))
+		f = open(joinpath(resultsdir, "$(casestring)-$numbuckets-$retries-predictions.dat"), "w")
 		writedlm(f, transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder predictions[wellorder, :]]))
 		close(f)
 
