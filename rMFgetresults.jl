@@ -68,8 +68,6 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 			j = JLD.load(filename)
 			mixers_var[numbuckets] = j["Wvar"]
 			buckets_var[numbuckets] = j["Hvar"]
-			@show mixers_var[numbuckets]
-			@show buckets_var[numbuckets]
 		end
 
 		orderedbuckets = similar(buckets[numbuckets])
