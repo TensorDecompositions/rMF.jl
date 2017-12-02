@@ -309,15 +309,15 @@ function displayconc(name::AbstractString)
 end
 function displayconc(names::Vector{String})
 	if length(names) == 0
-		display([transposevector(["Wells"; uniquespecies]); wellnameorder datamatrix[wellorder,:]])
+		display([transposevector(["Wells"; uniquespecies]); wellnameorder datamatrix[wellorder, :]])
 	else
 		i = findin(uniquespecies, names)
 		if length(i) > 0
-			display([transposevector(["Wells"; uniquespecies[i]]); wellnameorder datamatrix[wellorder,i]])
+			display([transposevector(["Wells"; uniquespecies[i]]); wellnameorder datamatrix[wellorder, i]])
 		else
 			i = findin(wellnameorder, names)
 			if length(i) > 0
-				display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[i] datamatrix[wellorder[i],:]]))
+				display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[i] datamatrix[wellorder[i], :]]))
 			end
 		end
 	end
