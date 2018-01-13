@@ -242,6 +242,8 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		info("Species ($(length(uniquespecies)))")
 		display(uniquespecies)
 		info("Wells ($(length(uniquewells)))")
+		global wellnameorder = uniquewells
+		global wellorder = 1:length(wellnameorder)
 		display(uniquewells)
 		!quiet && info("Concentration matrix:")
 		!quiet && display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
@@ -581,6 +583,7 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	wellorder, wellnameorder = getwellorder(quiet=quiet)
 	global wellorder
 	global wellnameorder
+	@show wellnameorder
 
 	if !quiet
 		info("Species ($(length(uniquespecies)))")
