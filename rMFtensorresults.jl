@@ -45,7 +45,7 @@ function plottensorresults(X::Array, Xe::Array, W::Array, ns::Number=size(W)[2];
 			pl[i] = Gadfly.layer(x=rMF.tensorperiod.+1, y=y1, Gadfly.Geom.line(), Gadfly.Theme(line_width=2Gadfly.pt, default_color=parse(Colors.Colorant, scolors[i])))
 			pd[i] = Gadfly.layer(x=rMF.tensorperiod.+1, y=y2, Gadfly.Geom.line(), Gadfly.Theme(line_width=2Gadfly.pt, line_style=:dash,default_color=parse(Colors.Colorant, scolors[i])))
 		end
-		f = Gadfly.plot(pl..., pd..., Gadfly.Coord.Cartesian(xmin=2005, xmax=2017, ymin=0, ymax=1), Gadfly.Guide.xlabel(""), Gadfly.Guide.ylabel("Normalized concentrations"), Gadfly.Guide.title(w), Gadfly.Guide.manual_color_key("Species", rMF.uniquespecies, scolors))
+		f = Gadfly.plot(pl..., pd..., Gadfly.Coord.Cartesian(xmin=2005, xmax=2017, ymin=0, ymax=1), Gadfly.Guide.xlabel(""), Gadfly.Guide.ylabel("Normalized concentrations"), Gadfly.Guide.title(w), Gadfly.Guide.manual_color_key("Species", rMF.uniquespecies, scolors[1:length(rMF.uniquespecies)]))
 		Gadfly.draw(Gadfly.PNG("$figuredir/$prefix-$w-normallconc.png", 6Gadfly.inch, 3Gadfly.inch), f)
 		display(f)
 		println()
@@ -61,7 +61,7 @@ function plottensorresults(X::Array, Xe::Array, W::Array, ns::Number=size(W)[2];
 			pl[i] = Gadfly.layer(x=rMF.tensorperiod.+1, y=y1, Gadfly.Geom.line(), Gadfly.Theme(line_width=2Gadfly.pt, default_color=parse(Colors.Colorant, scolors[i])))
 			pd[i] = Gadfly.layer(x=rMF.tensorperiod.+1, y=y2, Gadfly.Geom.line(), Gadfly.Theme(line_width=2Gadfly.pt, line_style=:dash,default_color=parse(Colors.Colorant, scolors[i])))
 		end
-		f = Gadfly.plot(pl..., pd..., Gadfly.Coord.Cartesian(xmin=2005, xmax=2017, ymin=0, ymax=1), Gadfly.Guide.xlabel(""), Gadfly.Guide.ylabel("Normalized concentrations"), Gadfly.Guide.title(w), Gadfly.Guide.manual_color_key("Species", rMF.uniquespecies, scolors))
+		f = Gadfly.plot(pl..., pd..., Gadfly.Coord.Cartesian(xmin=2005, xmax=2017, ymin=0, ymax=1), Gadfly.Guide.xlabel(""), Gadfly.Guide.ylabel("Normalized concentrations"), Gadfly.Guide.title(w), Gadfly.Guide.manual_color_key("Species", rMF.uniquespecies, scolors[1:length(rMF.uniquespecies)]))
 		Gadfly.draw(Gadfly.PNG("$figuredir/$prefix-$w-normwellconc.png", 6Gadfly.inch, 3Gadfly.inch), f)
 		display(f)
 		println()
@@ -91,7 +91,7 @@ function getalltensorresults(X::Array, nsrange; retries=1000, resultdir="tensor-
 			NMFk.fixmixers!(X, Wbest)
 			Xbest = NMFk.mixmatchcompute(X, Wbest, Hbest, isn)
 			ofc = vecnorm(X[.!isn] .- Xbest[.!isn])
-			println("$ns: fit $(minimum(fit)) ($ofc)")
+			println("$filename: $ns: fit $(minimum(fit)) ($ofc)")
 			!quiet && for i = 1:length(W)
 				NMFk.fixmixers!(X, W[i])
 				isnw = isnan(W[i])
@@ -99,6 +99,8 @@ function getalltensorresults(X::Array, nsrange; retries=1000, resultdir="tensor-
 				ofc = vecnorm(X[.!isn] .- Xe[.!isn])
 				@show ofc, maximum(W[i][.!isnw]), maximum(H[i])
 			end
+		else
+			warn("$filename is missing")
 		end
 	end
 	return Xbest, Wbest, Hbest
@@ -115,7 +117,28 @@ function gettensorresults(X::Array, nsrange; retries=1000, resultdir="tensor-res
 			NMFk.fixmixers!(X, W)
 			Xe = NMFk.mixmatchcompute(X, W, H, isn)
 			ofc = vecnorm(X[.!isn] .- Xe[.!isn])
-			println("$ns: fit $of ($ofc) silhouette $sil aic $aic")
+			println("$filename: $ns: fit $of ($ofc) silhouette $sil aic $aic")
+		else
+			warn("$filename is missing")
+		end
+	end
+	return Xe, W, H
+end
+
+function getoldtensorresults(X::Array, nsrange; retries=1, resultdir="tensor-results", keyword="", quiet=true, isn=isnan.(X))
+	Xe = nothing
+	W = nothing
+	H = nothing
+	for ns = nsrange
+		filename = "$resultdir/$(rMF.case)-w$(rMF.wellssetid)-s$(rMF.speciessetid)-y$(rMF.tensoryearstep)-$keyword$ns-$retries.jld"
+		if isfile(filename)
+			of, W, H = JLD.load(filename, "OF", "W", "H")
+			NMFk.fixmixers!(X, W)
+			Xe = NMFk.mixmatchcompute(X, W, H, isn)
+			ofc = vecnorm(X[.!isn] .- Xe[.!isn])
+			println("$filename: $ns: fit $of ($ofc)")
+		else
+			warn("$filename is missing")
 		end
 	end
 	return Xe, W, H
