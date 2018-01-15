@@ -27,8 +27,16 @@ function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::Abst
 		filename = joinpath(resultsdir, "$(casestring)-$numbuckets-$retries.jld")
 		if isfile(filename)
 			j = JLD.load(filename)
-			mixers[numbuckets] = j["mixers"]
-			buckets[numbuckets] = j["buckets"]
+			if haskey(j, "mixers")
+				mixers[numbuckets] = j["mixers"]
+			else
+				mixers[numbuckets] = j["W"]
+			end
+			if haskey(j, "buckets")
+				buckets[numbuckets] = j["buckets"]
+			else
+				buckets[numbuckets] = j["H"]
+			end
 			fitquality[numbuckets] = j["fit"]
 			robustness[numbuckets] = j["robustness"]
 			if haskey(j, "aic")

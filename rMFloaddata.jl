@@ -583,7 +583,6 @@ function loaddata(probstamp::Int64=20160102, keyword::AbstractString=""; wellsse
 	wellorder, wellnameorder = getwellorder(quiet=quiet)
 	global wellorder
 	global wellnameorder
-	@show wellnameorder
 
 	if !quiet
 		info("Species ($(length(uniquespecies)))")
