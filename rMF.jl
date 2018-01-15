@@ -42,8 +42,10 @@ truemixer = Array{Float64}(0)
 
 include("rMFtranspose.jl")
 include("rMFloaddata.jl")
+include("rMFloadtensor.jl")
 include("rMFexecute.jl")
 include("rMFgetresults.jl")
+include("rMFtensorresults.jl")
 
 #=
 dict_species = DataStructures.OrderedDict{AbstractString,AbstractString}(
