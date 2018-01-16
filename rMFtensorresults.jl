@@ -143,3 +143,15 @@ function getoldtensorresults(X::Array, nsrange; retries=1, resultdir="tensor-res
 	end
 	return Xe, W, H
 end
+
+function roundsf(d::Number)
+	f = floor(log10(d))
+	rbase = convert(Int64, ceil(10^f/2))
+	if f < 0
+		rbase = 10
+		sigdig = convert(Int64, -f)
+	else
+		sigdig = -1
+	end
+	round(d, sigdig, rbase)
+end
