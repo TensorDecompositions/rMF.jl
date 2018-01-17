@@ -26,7 +26,7 @@ function check(casename::AbstractString, numruns::Int=100, keyword::AbstractStri
 end
 
 "Load data for rMF analysis"
-function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::Bool=false, ns::Int=3, nw::Int=10, nc::Int=5, nd::Int=0, nr::Int=0, quiet::Bool=false, seed::Integer=0)
+function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::Bool=false, ns::Int=3, nw::Int=10, nc::Int=5, nd::Int=0, nr::Int=0, nt::Int=0, quiet::Bool=false, seed::Integer=0)
 	if seed != 0
 		srand(seed)
 	end
@@ -171,15 +171,24 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 		global concindex = collect(1:nc)
 		global dataindex = collect(1:(nc+nd))
 		global wellcoord = []
-		mixer = rand(nw, ns)
+		if nt == 0
+			mixer = rand(nw, ns)
+		else
+			mixer = rand(nw, ns, nt)
+		end
 		mixer = (mixer .* 2).^10
-		mixer_norm = diagm(1 ./ vec(sum(mixer, 2)))
-		global truemixer = mixer_norm * mixer
+		if nt == 0
+			mixer_norm = 1 ./ vec(sum(mixer, 2))
+			global truemixer = mixer .* mixer_norm
+		else
+			mixer_norm = 1 ./ vec(sum(mixer, 2))
+			global truemixer = reshape(reshape(mixer, (nw*nt,ns)) .* mixer_norm, (nw,ns,nt))
+		end
 		global truemixer = truemixer ./ (sum(truemixer, 2))
 		bucket = rand(ns, nc)
 		bucket = (bucket .* 2).^4
 		bucket_norm = diagm(1 ./ vec(maximum(bucket, 1)))
-		global truebucket = bucket * bucket_norm
+		global truebucket = bucket * bucket_norm * 1000
 		if noise
 			noise_matrix = randn(nw, nc + nd + nr) / 100
 		else
@@ -218,14 +227,23 @@ function loaddata(casename::AbstractString, keyword::AbstractString=""; noise::B
 			datamatrix[:,1:nr+1] = NaN
 		end
 		if nd <= 0 && nr <=0
-			global datamatrix = convert(Array{Float32,2}, truemixer * truebucket + noise_matrix)
+			if nt == 0
+				global datamatrix = convert(Array{Float32,2}, truemixer * truebucket + noise_matrix)
+				!quiet && info("Concentration matrix:")
+				!quiet && display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
+			else
+				global datatensor = convert(Array{Float32,3}, NMFk.mixmatchcompute(convert(Array{Float32,3}, truemixer), convert(Array{Float32,2}, truebucket)))
+				display(datatensor)
+			end
 		end
-		global case = casename * "_" * string(nw) * "_" * string(nc) * "_" * string(nd) * "_" * string(nr) * "_" * string(ns)
-		!quiet && info("Concentration matrix:")
-		!quiet && display([transposevector(["Wells"; uniquespecies]); uniquewells datamatrix])
+		if nt == 0
+			global case = casename * "_" * string(nw) * "_" * string(nc) * "_" * string(nd) * "_" * string(nr) * "_" * string(ns)
+		else
+			global case = casename * "tensor_" * string(nw) * "_" * string(nc) * "_" * string(nt) * "_" * string(ns)
+		end
 		return
 	end
-	filename = "data/" * casename * ".csv"
+	filename = joinpath("data", casename * ".csv")
 	if isfile(filename)
 		rawdata = readcsv(filename)
 		rawdata[rawdata .== " "] = NaN
