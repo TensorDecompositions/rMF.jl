@@ -85,7 +85,11 @@ function getalltensorresults(X::Array, nsrange; retries=1000, resultdir="tensor-
 	Wbest = nothing
 	Hbest = nothing
 	for ns = nsrange
-		filename = "$resultdir/$(rMF.case)-w$(rMF.wellssetid)-s$(rMF.speciessetid)-y$(rMF.tensoryearstep)-$keyword$ns-$retries-all.jld"
+		if isdefined(rMF, :wellssetid)
+			filename = "$resultdir/$(rMF.case)-w$(rMF.wellssetid)-s$(rMF.speciessetid)-y$(rMF.tensoryearstep)-$keyword$ns-$retries-all.jld"
+		else
+			filename = "$resultdir/$(rMF.case)-$keyword$ns-$retries-all.jld"
+		end
 		if isfile(filename)
 			fit, Wbest, Hbest, W, H = JLD.load(filename, "fit", "Wbest", "Hbest", "W", "H")
 			NMFk.fixmixers!(X, Wbest)
@@ -111,7 +115,11 @@ function gettensorresults(X::Array, nsrange; retries=1000, resultdir="tensor-res
 	W = nothing
 	H = nothing
 	for ns = nsrange
-		filename = "$resultdir/$(rMF.case)-w$(rMF.wellssetid)-s$(rMF.speciessetid)-y$(rMF.tensoryearstep)-$keyword$ns-$retries.jld"
+		if isdefined(rMF, :wellssetid)
+			filename = "$resultdir/$(rMF.case)-w$(rMF.wellssetid)-s$(rMF.speciessetid)-y$(rMF.tensoryearstep)-$keyword$ns-$retries.jld"
+		else
+			filename = "$resultdir/$(rMF.case)-$keyword$ns-$retries.jld"
+		end
 		if isfile(filename)
 			of, sil, aic, W, H = JLD.load(filename, "fit", "robustness", "aic", "W", "H")
 			NMFk.fixmixers!(X, W)
@@ -130,7 +138,11 @@ function getoldtensorresults(X::Array, nsrange; retries=1, resultdir="tensor-res
 	W = nothing
 	H = nothing
 	for ns = nsrange
-		filename = "$resultdir/$(rMF.case)-w$(rMF.wellssetid)-s$(rMF.speciessetid)-y$(rMF.tensoryearstep)-$keyword$ns-$retries.jld"
+		if isdefined(rMF, :wellssetid)
+			filename = "$resultdir/$(rMF.case)-w$(rMF.wellssetid)-s$(rMF.speciessetid)-y$(rMF.tensoryearstep)-$keyword$ns-$retries.jld"
+		else
+			filename = "$resultdir/$(rMF.case)-$keyword$ns-$retries.jld"
+		end
 		if isfile(filename)
 			of, W, H = JLD.load(filename, "OF", "W", "H")
 			NMFk.fixmixers!(X, W)
