@@ -327,20 +327,22 @@ end
 function displayconc(name::AbstractString)
 	displayconc([name])
 end
-function displayconc(names::Vector{String})
+function displayconc(names::Vector{String}; quiet::Bool=true)
 	if length(names) == 0
-		display([transposevector(["Wells"; uniquespecies]); wellnameorder datamatrix[wellorder, :]])
+		t = [transposevector(["Wells"; uniquespecies]); wellnameorder datamatrix[wellorder, :]]
 	else
 		i = findin(uniquespecies, names)
 		if length(i) > 0
-			display([transposevector(["Wells"; uniquespecies[i]]); wellnameorder datamatrix[wellorder, i]])
+			t = [transposevector(["Wells"; uniquespecies[i]]); wellnameorder datamatrix[wellorder, i]]
 		else
 			i = findin(wellnameorder, names)
 			if length(i) > 0
-				display(transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[i] datamatrix[wellorder[i], :]]))
+				t = transposematrix([transposevector(["Wells"; uniquespecies]); wellnameorder[i] datamatrix[wellorder[i], :]])
 			end
 		end
 	end
+	!quiet && display(t)
+	return t
 end
 
 "Load data for rMF analysis"
