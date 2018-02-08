@@ -31,13 +31,13 @@ function plottensorresults(X::Array, Xe::Array, W::Array, ns::Number=size(W)[2];
 			pl = Gadfly.layer(x=rMF.tensorperiod.+1, y=y1, Gadfly.Geom.line(), Gadfly.Theme(line_width=1Gadfly.pt, default_color=parse(Colors.Colorant, scolors[i])))
 			pd = Gadfly.layer(x=rMF.tensorperiod.+1, y=y2, Gadfly.Geom.line(), Gadfly.Theme(line_width=3Gadfly.pt, line_style=:dashdotdot, default_color=parse(Colors.Colorant, scolors[i])))
 			pp = Gadfly.plot(pl..., pd..., Gadfly.Coord.Cartesian(xmin=2005, xmax=2017), Gadfly.Guide.xlabel(""), Gadfly.Guide.ylabel(rMF.uniquespecies[i]), Gadfly.Guide.title(w))
-			Gadfly.draw(Gadfly.PNG("$figuredir/$prefix$w-$(rMF.uniquespecies[i]).png", 6Gadfly.inch, 3Gadfly.inch), pp)
+			Gadfly.draw(Gadfly.PNG("$figuredir/$prefix$w-$(rMF.uniquespecies[i]).png", 6Gadfly.inch, 3Gadfly.inch, dpi=300), pp)
 			p[i] = Gadfly.plot(pl..., pd..., Gadfly.Coord.Cartesian(xmin=2005, xmax=2017), Gadfly.Guide.xlabel(""), Gadfly.Guide.ylabel(rMF.uniquespecies[i]))
 		end
 		f = Compose.compose(Compose.context(0, 0, 1Compose.w, 0.001Compose.h),
 			(Compose.context(), Compose.fill("gray"), Compose.fontsize(10Compose.pt), Compose.text(0.5, 1, w, Compose.hcenter, Compose.vtop)))
 		pl = Gadfly.vstack(f, p...)
-		Gadfly.draw(Gadfly.PNG("$figuredir/$prefix$w-allconc.png", 6Gadfly.inch, 3Gadfly.inch * length(rMF.uniquespecies)), pl)
+		Gadfly.draw(Gadfly.PNG("$figuredir/$prefix$w-allconc.png", 6Gadfly.inch, 3Gadfly.inch * length(rMF.uniquespecies), dpi=300), pl)
 	end
 
 	info("Plot normalized species concentrations at each well (normalized by set) ...")
@@ -52,26 +52,26 @@ function plottensorresults(X::Array, Xe::Array, W::Array, ns::Number=size(W)[2];
 			pd[i] = Gadfly.layer(x=rMF.tensorperiod.+1, y=y2, Gadfly.Geom.line(), Gadfly.Theme(line_width=2Gadfly.pt, line_style=:dash,default_color=parse(Colors.Colorant, scolors[i])))
 		end
 		f = Gadfly.plot(pl..., pd..., Gadfly.Coord.Cartesian(xmin=2005, xmax=2017, ymin=0, ymax=1), Gadfly.Guide.xlabel(""), Gadfly.Guide.ylabel("Normalized concentrations"), Gadfly.Guide.title(w), Gadfly.Guide.manual_color_key("Species", rMF.uniquespecies, scolors[1:length(rMF.uniquespecies)]))
-		Gadfly.draw(Gadfly.PNG("$figuredir/$prefix$w-normallconc.png", 6Gadfly.inch, 3Gadfly.inch), f)
+		Gadfly.draw(Gadfly.PNG("$figuredir/$prefix$w-normallconc.png", 6Gadfly.inch, 3Gadfly.inch, dpi=300), f)
 		display(f)
 		println()
 	end
 
-	info("Plot normalized species concentrations at each well (normalized by well) ...")
-	pl = Vector{Any}(length(rMF.uniquespecies))
-	pd = Vector{Any}(length(rMF.uniquespecies))
-	for (c, w) in enumerate(rMF.wellnameorder)
-		for i = 1:length(rMF.uniquespecies)
-			y1 = (X[c, i, :] - sminw[c, i]) / (smaxw[c, i] - sminw[c, i])
-			y2 = (Xe[c, i, :] - sminw[c, i]) / (smaxw[c, i] - sminw[c, i])
-			pl[i] = Gadfly.layer(x=rMF.tensorperiod.+1, y=y1, Gadfly.Geom.line(), Gadfly.Theme(line_width=2Gadfly.pt, default_color=parse(Colors.Colorant, scolors[i])))
-			pd[i] = Gadfly.layer(x=rMF.tensorperiod.+1, y=y2, Gadfly.Geom.line(), Gadfly.Theme(line_width=2Gadfly.pt, line_style=:dash,default_color=parse(Colors.Colorant, scolors[i])))
-		end
-		f = Gadfly.plot(pl..., pd..., Gadfly.Coord.Cartesian(xmin=2005, xmax=2017, ymin=0, ymax=1), Gadfly.Guide.xlabel(""), Gadfly.Guide.ylabel("Normalized concentrations"), Gadfly.Guide.title(w), Gadfly.Guide.manual_color_key("Species", rMF.uniquespecies, scolors[1:length(rMF.uniquespecies)]))
-		Gadfly.draw(Gadfly.PNG("$figuredir/$prefix$w-normwellconc.png", 6Gadfly.inch, 3Gadfly.inch), f)
-		display(f)
-		println()
-	end
+	# info("Plot normalized species concentrations at each well (normalized by well) ...")
+	# pl = Vector{Any}(length(rMF.uniquespecies))
+	# pd = Vector{Any}(length(rMF.uniquespecies))
+	# for (c, w) in enumerate(rMF.wellnameorder)
+	# 	for i = 1:length(rMF.uniquespecies)
+	# 		y1 = (X[c, i, :] - sminw[c, i]) / (smaxw[c, i] - sminw[c, i])
+	# 		y2 = (Xe[c, i, :] - sminw[c, i]) / (smaxw[c, i] - sminw[c, i])
+	# 		pl[i] = Gadfly.layer(x=rMF.tensorperiod.+1, y=y1, Gadfly.Geom.line(), Gadfly.Theme(line_width=2Gadfly.pt, default_color=parse(Colors.Colorant, scolors[i])))
+	# 		pd[i] = Gadfly.layer(x=rMF.tensorperiod.+1, y=y2, Gadfly.Geom.line(), Gadfly.Theme(line_width=2Gadfly.pt, line_style=:dash,default_color=parse(Colors.Colorant, scolors[i])))
+	# 	end
+	# 	f = Gadfly.plot(pl..., pd..., Gadfly.Coord.Cartesian(xmin=2005, xmax=2017, ymin=0, ymax=1), Gadfly.Guide.xlabel(""), Gadfly.Guide.ylabel("Normalized concentrations"), Gadfly.Guide.title(w), Gadfly.Guide.manual_color_key("Species", rMF.uniquespecies, scolors[1:length(rMF.uniquespecies)]))
+	# 	Gadfly.draw(Gadfly.PNG("$figuredir/$prefix$w-normwellconc.png", 6Gadfly.inch, 3Gadfly.inch, dpi=300), f)
+	# 	display(f)
+	# 	println()
+	# end
 
 	info("NTFk results for w$(rMF.wellssetid) s$(rMF.speciessetid) y$(rMF.tensorperiod) $ns sources ...")
 	pl = Vector{Any}(ns)
@@ -80,7 +80,7 @@ function plottensorresults(X::Array, Xe::Array, W::Array, ns::Number=size(W)[2];
 			pl[i] = Gadfly.layer(x=rMF.tensorperiod.+1, y=W[c, i, :], Gadfly.Geom.line(), Gadfly.Theme(line_width=2Gadfly.pt, default_color=parse(Colors.Colorant, scolors[i])))
 		end
 		f = Gadfly.plot(pl..., Gadfly.Coord.Cartesian(xmin=2005, xmax=2017, ymin=0, ymax=1), Gadfly.Guide.xlabel(""), Gadfly.Guide.ylabel("Source mixing"), Gadfly.Guide.title(w), Gadfly.Guide.manual_color_key("Sources", sourcenames, scolors[1:ns]))
-		Gadfly.draw(Gadfly.PNG("$figuredir/$prefix$w-mixing.png", 6Gadfly.inch, 3Gadfly.inch), f)
+		Gadfly.draw(Gadfly.PNG("$figuredir/$prefix$w-mixing.png", 6Gadfly.inch, 3Gadfly.inch, dpi=300), f)
 		display(f)
 		println()
 	end
