@@ -73,7 +73,7 @@ function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10,
 		deltamatrix = Array{Float32}(0, 0)
 	end
 	indexnan = isnan.(datamatrix)
-	numobservations = length(vec(datamatrix[map(!, indexnan)]))
+	numobservations = length(vec(datamatrix[!.indexnan]))
 	for numbuckets in range
 		mixers[numbuckets], buckets[numbuckets], fitquality[numbuckets], robustness[numbuckets], aic[numbuckets] = NMFk.execute(concmatrix, numbuckets, retries; deltas=deltamatrix, deltaindices=deltaindices, ratios=ratiomatrix, ratioindices=ratiocomponents, normalize=normalize, scale=scale, quiet=quiet, regularizationweight=regularizationweight, weightinverse=weightinverse, clusterweights=clusterweights, mixture=mixture, method=method, tol=tol, casefilename=casefilename, kw...)
 		mixsum = sum(mixers[numbuckets], 2)
