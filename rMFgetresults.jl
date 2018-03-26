@@ -1,5 +1,5 @@
 "Retrieve saved rMF results"
-function getresults(range::Union{UnitRange{Int},Int}=1:maxbuckets, keyword::AbstractString=""; retries::Int=10, resultsdir::AbstractString="results", datadir::AbstractString="data", brief::Bool=false)
+function getresults(range::Union{Range{Int},Int}=1:maxbuckets, keyword::AbstractString=""; retries::Int=10, resultsdir::AbstractString="results", datadir::AbstractString="data", brief::Bool=false)
 	if keyword != ""
 		if case != "" && !contains(keyword, case)
 			casestring = case * "-" * keyword

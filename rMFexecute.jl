@@ -6,7 +6,7 @@ end
 """
 Perform rMF analyses
 """
-function execute(range::Union{UnitRange{Int},Int}=1:maxbuckets; retries::Int=10, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, quiet::Bool=true, clusterweights::Bool=false, convertdeltas::Bool=true, ignoreratios::Bool=false, nooutput::Bool=false, mixture::Symbol=:mixmatch, method::Symbol=:ipopt, save::Bool=true, resultdir::AbstractString="results", tol=1e-3, kw...)
+function execute(range::Union{Range{Int},Int}=1:maxbuckets; retries::Int=10, normalize::Bool=false, scale::Bool=false, regularizationweight::Float32=convert(Float32, 0), weightinverse::Bool=false, quiet::Bool=true, clusterweights::Bool=false, convertdeltas::Bool=true, ignoreratios::Bool=false, nooutput::Bool=false, mixture::Symbol=:mixmatch, method::Symbol=:ipopt, save::Bool=true, resultdir::AbstractString="results", tol=1e-3, kw...)
 	if !isdefined(rMF, :datamatrix) || sizeof(datamatrix) == 0
 		warn("rMF problem is not defined; execute `rMF.loaddata()` first!")
 		return
