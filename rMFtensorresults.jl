@@ -20,7 +20,7 @@ function plottensorresults(X::Array, Xe::Array, W::Array, ns::Number=size(W)[2];
 		Xn[:, i, :] ./= smax[i]
 	end
 
-	scolors = ["red", "blue", "green", "orange", "purple", "brown", "cyan", "yellow"]
+	scolors = ["red", "blue", "green", "orange", "purple", "brown", "cyan", "magenta"]
 
 	info("Plot species concentrations for each well ...")
 	for (c, w) in enumerate(rMF.wellnameorder)
@@ -28,16 +28,17 @@ function plottensorresults(X::Array, Xe::Array, W::Array, ns::Number=size(W)[2];
 		for i = 1:length(rMF.uniquespecies)
 			y1 = X[c, i, :]
 			y2 = Xe[c, i, :]
-			pl = Gadfly.layer(x=rMF.tensorperiod.+1, y=y1, Gadfly.Geom.line(), Gadfly.Theme(line_width=1Gadfly.pt, default_color=parse(Colors.Colorant, scolors[i])))
+			pl = Gadfly.layer(x=rMF.tensorperiod.+1, y=y1, Gadfly.Geom.line(), Gadfly.Theme(line_width=2Gadfly.pt, default_color=parse(Colors.Colorant, scolors[i])))
 			pd = Gadfly.layer(x=rMF.tensorperiod.+1, y=y2, Gadfly.Geom.line(), Gadfly.Theme(line_width=3Gadfly.pt, line_style=:dashdotdot, default_color=parse(Colors.Colorant, scolors[i])))
 			pp = Gadfly.plot(pl..., pd..., Gadfly.Coord.Cartesian(xmin=2005, xmax=2017), Gadfly.Guide.xlabel(""), Gadfly.Guide.ylabel(rMF.uniquespecies[i]), Gadfly.Guide.title(w))
 			Gadfly.draw(Gadfly.PNG("$figuredir/$prefix$w-$(rMF.uniquespecies[i]).png", 6Gadfly.inch, 3Gadfly.inch, dpi=300), pp)
-			p[i] = Gadfly.plot(pl..., pd..., Gadfly.Coord.Cartesian(xmin=2005, xmax=2017), Gadfly.Guide.xlabel(""), Gadfly.Guide.ylabel(rMF.uniquespecies[i]))
+			p[i] = Gadfly.plot(pl..., pd..., Gadfly.Coord.Cartesian(xmin=2005, xmax=2017), Gadfly.Guide.xlabel(""), Gadfly.Guide.ylabel(rMF.uniquespecies[i]), Gadfly.Theme(major_label_font_size=24Gadfly.pt, minor_label_font_size=18Gadfly.pt))
 		end
 		f = Compose.compose(Compose.context(0, 0, 1Compose.w, 0.001Compose.h),
 			(Compose.context(), Compose.fill("gray"), Compose.fontsize(10Compose.pt), Compose.text(0.5, 1, w, Compose.hcenter, Compose.vtop)))
 		pl = Gadfly.vstack(f, p...)
 		Gadfly.draw(Gadfly.PNG("$figuredir/$prefix$w-allconc.png", 6Gadfly.inch, 3Gadfly.inch * length(rMF.uniquespecies), dpi=300), pl)
+		Gadfly.draw(Gadfly.PDF("$figuredir/$prefix$w-allconc.pdf", 6Gadfly.inch, 3Gadfly.inch * length(rMF.uniquespecies)), pl)
 	end
 
 	info("Plot normalized species concentrations at each well (normalized by set) ...")
