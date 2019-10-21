@@ -1,5 +1,6 @@
 module rMF
 
+import Pkg
 import NMFk
 import JLD
 import StatsBase
